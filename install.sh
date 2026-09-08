@@ -14,13 +14,16 @@ apt-get install -y python3 python3-venv python3-pip curl iproute2 qrencode opens
 command -v awg >/dev/null 2>&1 || { echo 'AmneziaWG 3.1 не найден. Установите AWG и повторите.'; exit 1; }
 cp "$SRC/app.py" "$BASE/app.py"; chmod 600 "$BASE/app.py"
 [ -f "$SRC/background.svg" ] && cp "$SRC/background.svg" "$BASE/background.svg"
-for mod in naiveproxy_panel.py telegram_bot.py system_panel.py advanced_panel.py sweden_flag.py; do [ -f "$SRC/$mod" ] && cp "$SRC/$mod" "$BASE/$mod" && chmod 600 "$BASE/$mod"; done
+for mod in naiveproxy_panel.py telegram_bot.py system_panel.py advanced_panel.py; do [ -f "$SRC/$mod" ] && cp "$SRC/$mod" "$BASE/$mod" && chmod 600 "$BASE/$mod"; done
 python3 - "$BASE/app.py" <<'PY'
 from pathlib import Path
 p=Path(__import__('sys').argv[1]);s=p.read_text()
 for a,b in [('AWG Panel 7.1','AWG Panel 8.1'),('AWG Panel 7.2','AWG Panel 8.1'),('AWG Panel 7.3','AWG Panel 8.1'),('AWG Panel 7.4','AWG Panel 8.1'),('AWG Panel 8.0','AWG Panel 8.1'),('v=71','v=81'),('v=72','v=81'),('v=73','v=81'),('v=74','v=81'),('v=80','v=81')]:s=s.replace(a,b)
+# Make helper modules importing `app` resolve to the running app.py module.
+if 'sys.modules.setdefault("app", sys.modules[__name__])' not in s:
+ s=s.replace('from flask import', 'import sys\nsys.modules.setdefault("app", sys.modules[__name__])\n\nfrom flask import', 1)
 adds=[]
-for mod in ('naiveproxy_panel','telegram_bot','system_panel','advanced_panel','sweden_flag'):
+for mod in ('naiveproxy_panel','telegram_bot','system_panel','advanced_panel'):
  if f'{mod}.register(app)' not in s:adds.append(f'import {mod}\n{mod}.register(app)\n')
 if adds:
  marker='if __name__ == "__main__":';add=''.join(adds)
@@ -44,7 +47,7 @@ PY
 );fi
 python3 -m venv "$BASE/venv"
 "$BASE/venv/bin/pip" install -q 'Flask>=3,<4' 'qrcode[pil]>=7,<9'
-"$BASE/venv/bin/python" -m py_compile "$BASE/app.py" "$BASE/naiveproxy_panel.py" "$BASE/telegram_bot.py" "$BASE/system_panel.py" "$BASE/advanced_panel.py" "$BASE/sweden_flag.py"
+"$BASE/venv/bin/python" -m py_compile "$BASE/app.py" "$BASE/naiveproxy_panel.py" "$BASE/telegram_bot.py" "$BASE/system_panel.py" "$BASE/advanced_panel.py"
 SECRET=$(openssl rand -hex 32)
 cat >/etc/systemd/system/awgpanel.service <<EOF
 [Unit]
@@ -54,7 +57,6 @@ Wants=network-online.target
 [Service]
 WorkingDirectory=$BASE
 Environment=AWGPANEL_SECRET=$SECRET
-Environment=AWGPANEL_PASSWORD=$ADMIN_PASS
 ExecStart=$BASE/venv/bin/python $BASE/app.py
 Restart=on-failure
 RestartSec=2
@@ -63,7 +65,7 @@ WantedBy=multi-user.target
 EOF
 cat >/etc/systemd/system/awgpanel-telegram.service <<EOF
 [Unit]
-Description=AWG Panel Telegram Bot
+Description=AWG Panel 8.1 Telegram Bot
 After=network-online.target awgpanel.service
 Wants=network-online.target
 [Service]
@@ -82,4 +84,3 @@ if [ "$BOT_CONFIGURED" = 1 ];then systemctl enable --now awgpanel-telegram.servi
 sleep 2;systemctl is-active --quiet awgpanel||{ journalctl -u awgpanel -n 80 --no-pager;exit 1; }
 IP=$(curl -4 -fsS --max-time 5 https://api.ipify.org||true)
 echo "AWG Panel 8.1: http://${IP}:8080/login";echo "Login: admin";if [ -f "$BASE/.initial_password" ];then echo "Password: $(cat "$BASE/.initial_password")";else echo 'Password: existing password preserved';fi
-echo 'Sweden flag: 🇸🇪 добавляется в каждый клиентский AWG .conf и QR.'
