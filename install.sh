@@ -6,9 +6,9 @@ export DEBIAN_FRONTEND=noninteractive
 [ "${ID:-}" = ubuntu ] || { echo 'Требуется Ubuntu'; exit 1; }
 BASE=/opt/awg31-panel; SRC="$(cd "$(dirname "$0")" && pwd)"; TS=$(date +%Y%m%d-%H%M%S)
 mkdir -p "$BASE/backups" /etc/amnezia/amneziawg/clients /etc/awg31-panel
-[ -f "$BASE/app.py" ] && cp -a "$BASE/app.py" "$BASE/backups/app-before-7.3-$TS.py"
-[ -f "$BASE/panel.db" ] && cp -a "$BASE/panel.db" "$BASE/backups/panel-before-7.3-$TS.db"
-[ -f /etc/amnezia/amneziawg/awg0.conf ] && cp -a /etc/amnezia/amneziawg/awg0.conf "$BASE/backups/awg0-before-7.3-$TS.conf"
+[ -f "$BASE/app.py" ] && cp -a "$BASE/app.py" "$BASE/backups/app-before-7.4-$TS.py"
+[ -f "$BASE/panel.db" ] && cp -a "$BASE/panel.db" "$BASE/backups/panel-before-7.4-$TS.db"
+[ -f /etc/amnezia/amneziawg/awg0.conf ] && cp -a /etc/amnezia/amneziawg/awg0.conf "$BASE/backups/awg0-before-7.4-$TS.conf"
 apt-get update
 apt-get install -y python3 python3-venv python3-pip curl iproute2 qrencode openssl iptables
 command -v awg >/dev/null 2>&1 || { echo 'AmneziaWG 3.1 не найден. Установите AWG и повторите.'; exit 1; }
@@ -16,13 +16,15 @@ cp "$SRC/app.py" "$BASE/app.py"; chmod 600 "$BASE/app.py"
 [ -f "$SRC/background.svg" ] && cp "$SRC/background.svg" "$BASE/background.svg"
 [ -f "$SRC/naiveproxy_panel.py" ] && cp "$SRC/naiveproxy_panel.py" "$BASE/naiveproxy_panel.py"; chmod 600 "$BASE/naiveproxy_panel.py"
 [ -f "$SRC/telegram_bot.py" ] && cp "$SRC/telegram_bot.py" "$BASE/telegram_bot.py"; chmod 600 "$BASE/telegram_bot.py"
+[ -f "$SRC/system_panel.py" ] && cp "$SRC/system_panel.py" "$BASE/system_panel.py"; chmod 600 "$BASE/system_panel.py"
 python3 - "$BASE/app.py" <<'PY'
 from pathlib import Path
 p=Path(__import__('sys').argv[1]); s=p.read_text()
-s=s.replace('AWG Panel 7.1','AWG Panel 7.3').replace('AWG Panel 7.2','AWG Panel 7.3').replace('v=71','v=73').replace('v=72','v=73')
+s=s.replace('AWG Panel 7.1','AWG Panel 7.4').replace('AWG Panel 7.2','AWG Panel 7.4').replace('AWG Panel 7.3','AWG Panel 7.4').replace('v=71','v=74').replace('v=72','v=74').replace('v=73','v=74')
 adds=[]
 if 'naiveproxy_panel.register(app)' not in s: adds.append('import naiveproxy_panel\nnaiveproxy_panel.register(app)\n')
 if 'telegram_bot.register(app)' not in s: adds.append('import telegram_bot\ntelegram_bot.register(app)\n')
+if 'system_panel.register(app)' not in s: adds.append('import system_panel\nsystem_panel.register(app)\n')
 if adds:
  marker='if __name__ == "__main__":'; add=''.join(adds)
  if marker in s:s=s.replace(marker,add+marker,1)
@@ -54,11 +56,11 @@ PY
 fi
 python3 -m venv "$BASE/venv"
 "$BASE/venv/bin/pip" install -q 'Flask>=3,<4' 'qrcode[pil]>=7,<9'
-"$BASE/venv/bin/python" -m py_compile "$BASE/app.py" "$BASE/naiveproxy_panel.py" "$BASE/telegram_bot.py"
+"$BASE/venv/bin/python" -m py_compile "$BASE/app.py" "$BASE/naiveproxy_panel.py" "$BASE/telegram_bot.py" "$BASE/system_panel.py"
 SECRET=$(openssl rand -hex 32)
 cat >/etc/systemd/system/awgpanel.service <<EOF
 [Unit]
-Description=AWG Panel 7.3 Mobile Strong + NaiveProxy + Telegram
+Description=AWG Panel 7.4 Mobile Strong + NaiveProxy + Telegram + Monitoring
 After=network-online.target awg-quick@awg0.service
 Wants=network-online.target
 [Service]
@@ -92,6 +94,7 @@ if [ "$BOT_CONFIGURED" = 1 ]; then systemctl enable --now awgpanel-telegram.serv
 sleep 2
 systemctl is-active --quiet awgpanel || { journalctl -u awgpanel -n 80 --no-pager; exit 1; }
 IP=$(curl -4 -fsS --max-time 5 https://api.ipify.org || true)
-echo "AWG Panel 7.3: http://${IP}:8080/login"; echo "Login: admin"; if [ -f "$BASE/.initial_password" ]; then echo "Password: $(cat "$BASE/.initial_password")"; else echo 'Password: existing password preserved'; fi
+echo "AWG Panel 7.4: http://${IP}:8080/login"; echo "Login: admin"; if [ -f "$BASE/.initial_password" ]; then echo "Password: $(cat "$BASE/.initial_password")"; else echo 'Password: existing password preserved'; fi
 echo 'NaiveProxy: раздел «NaïveProxy» в панели.'
 echo 'Telegram: раздел «Telegram Bot» в панели; бот запускается после сохранения token + Telegram ID.'
+echo 'Monitoring: раздел «Система»; Health Check: раздел «Диагностика».'
