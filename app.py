@@ -1,78 +1,127 @@
-from flask import Flask,request,redirect,session,render_template_string,Response,send_file,jsonify
+#!/usr/bin/env python3
+from flask import Flask, request, redirect, session, render_template_string, send_file, jsonify, Response
 from pathlib import Path
-import os,subprocess,sqlite3,secrets,base64,json,struct,zlib,re
-app=Flask(__name__); app.secret_key=os.environ.get('AWG_PANEL_SECRET',secrets.token_hex(32))
-BASE=Path('/opt/awg31-panel'); DB=BASE/'panel.db'; CONF=Path('/etc/amnezia/amneziawg/awg0.conf'); CLIENT_DIR=Path('/etc/amnezia/amneziawg/clients'); WG='awg0'
-CSS='''<style>*{box-sizing:border-box}html,body{margin:0;background:#020814;color:#eef6ff;font:15px Arial,sans-serif}body{background:#020814 url('/background.jpg') center/cover fixed no-repeat}body:before{content:"";position:fixed;inset:0;background:linear-gradient(90deg,rgba(2,8,20,.96),rgba(2,9,20,.62),rgba(2,8,19,.8));z-index:-1}.app{display:flex;min-height:100vh}.side{width:270px;padding:18px;background:rgba(3,14,32,.94);border-right:1px solid #1b5685}.brand{font-size:24px;font-weight:800;margin-bottom:25px}.brand span,.ok{color:#00e7a0}.nav a{display:block;padding:12px 14px;margin:5px 0;border-radius:9px;color:#bdd0e8;text-decoration:none}.nav a:hover{background:#145da055;color:white}.main{flex:1}.top{height:68px;padding:16px 28px;text-align:right;background:#02091499;border-bottom:1px solid #1b568544}.content{max-width:1200px;margin:auto;padding:28px}.card{background:linear-gradient(145deg,#061832e6,#040f20e8);border:1px solid #2870a866;border-radius:13px;padding:18px;margin:14px 0;box-shadow:0 15px 45px #0007}.hero h1{font-size:42px;margin:0 0 8px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.metric{padding:18px}.metric b{display:block;font-size:25px;margin-top:8px}.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}input,select{width:100%;padding:10px;margin:5px 0 12px;background:#030c17;color:white;border:1px solid #294157;border-radius:8px}button,.btn{display:inline-block;padding:10px 15px;border:0;border-radius:8px;background:linear-gradient(135deg,#08ad82,#1597ff);color:white;text-decoration:none;font-weight:700;cursor:pointer}table{width:100%;border-collapse:collapse}td,th{padding:10px;border-bottom:1px solid #5cb9ff22;text-align:left}.bad{color:#ff7788}pre{white-space:pre-wrap;overflow:auto;background:#02080fcc;padding:14px;border-radius:8px}@media(max-width:800px){.app{display:block}.side{width:100%;height:auto}.nav{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}.nav a{text-align:center;font-size:11px;padding:8px}.grid{grid-template-columns:1fr 1fr}.two{grid-template-columns:1fr}.content{padding:14px}.hero h1{font-size:30px}} </style>'''
+import sqlite3, subprocess, time, os, re, io, qrcode
+BASE=Path('/opt/awg31-panel'); DB=BASE/'panel.db'; CONF=Path('/etc/amnezia/amneziawg/awg0.conf')
+if not CONF.exists(): CONF=Path('/etc/wireguard/awg0.conf')
+BG=BASE/'background.jpg'; app=Flask(__name__); app.secret_key=os.environ.get('AWGPANEL_SECRET','awg-panel-change-this-secret')
+CSS='''<style>:root{--p:rgba(6,20,38,.82);--l:rgba(75,177,240,.2);--t:#edf5ff;--m:#91a8bd;--g:#2ee59d}*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Inter,Segoe UI,Arial,sans-serif;color:var(--t);background:#06101d url('/background.jpg?v=700') center/cover fixed no-repeat}body:before{content:"";position:fixed;inset:0;background:linear-gradient(110deg,rgba(2,8,17,.97),rgba(3,13,27,.82),rgba(2,9,19,.92));z-index:-1}a{color:inherit}.shell{display:grid;grid-template-columns:285px 1fr;min-height:100vh}.side{background:rgba(3,13,28,.9);border-right:1px solid var(--l);padding:22px 18px;position:fixed;left:0;top:0;bottom:0;width:285px}.brand{display:flex;gap:12px;align-items:center;margin:0 4px 30px}.logo{width:48px;height:48px;border-radius:14px;background:linear-gradient(145deg,#13b69a,#178ef5);display:grid;place-items:center;font-weight:900}.brand h2{font-size:20px;margin:0}.brand h2 span{color:#17e6a0}.brand small{display:block;color:var(--m);margin-top:5px}.menu{display:grid;gap:7px}.menu a{padding:14px 15px;border-radius:10px;text-decoration:none;color:#bcd0e5;font-weight:650}.menu a:hover,.menu a.active{background:linear-gradient(90deg,rgba(24,127,224,.48),rgba(16,93,170,.18));border:1px solid rgba(43,170,255,.28);color:#fff}.sidebox{margin-top:25px;padding:15px;border:1px solid var(--l);border-radius:13px;background:rgba(4,18,36,.7)}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--g);box-shadow:0 0 12px rgba(46,229,157,.7);margin-right:8px}.main{grid-column:2;padding:0 36px 40px}.top{height:78px;margin:0 -36px 25px;padding:0 36px;display:flex;align-items:center;justify-content:space-between;background:rgba(3,13,28,.82);border-bottom:1px solid var(--l);position:sticky;top:0;z-index:4}.top .right{display:flex;align-items:center;gap:12px}.pill{padding:9px 13px;border:1px solid rgba(48,190,255,.25);border-radius:999px;color:#bfe9ff;background:rgba(9,37,59,.55)}.wrap{max-width:1400px;margin:auto}.hero{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin:15px 0 25px}.eyebrow{color:#aeb6ff;letter-spacing:.15em;font-size:13px}.hero h1{font-size:42px;margin:7px 0}.hero p{font-size:18px;color:#b5c8dc;margin:0}.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}.card{background:var(--p);border:1px solid var(--l);border-radius:16px;padding:20px;box-shadow:0 18px 45px rgba(0,0,0,.22)}.klabel{color:#8fa5ba;font-size:13px;text-transform:uppercase;letter-spacing:.07em}.kvalue{font-size:30px;font-weight:850;margin-top:8px}.ok{color:var(--g)}.bad{color:#ff7b72}.muted{color:var(--m)}.actions{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.action{padding:18px;border-radius:13px;text-decoration:none;border:1px solid var(--l);min-height:112px}.action strong{display:block;font-size:18px;margin:8px 0}.green{background:linear-gradient(135deg,rgba(0,164,112,.4),rgba(6,82,77,.32));border-color:rgba(39,231,161,.5)}.blue{background:linear-gradient(135deg,rgba(0,105,205,.36),rgba(13,50,103,.32))}.purple{background:linear-gradient(135deg,rgba(104,54,205,.36),rgba(43,31,93,.32))}.orange{background:linear-gradient(135deg,rgba(199,109,22,.38),rgba(83,50,21,.3))}.two{display:grid;grid-template-columns:1.35fr 1fr;gap:16px;margin-top:16px}.btn,button{display:inline-block;border:0;border-radius:10px;padding:10px 14px;background:linear-gradient(135deg,#0cae92,#168ff2);color:#fff;text-decoration:none;font-weight:750;cursor:pointer}.btn.alt{background:#26394b}.btn.small{padding:7px 10px;font-size:12px}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:11px 8px;border-bottom:1px solid rgba(130,170,205,.13)}th{color:#8fa5ba;font-size:12px;text-transform:uppercase}input{width:100%;padding:11px;background:#071522;color:#fff;border:1px solid #294257;border-radius:9px;margin:6px 0 12px}label{display:block;color:#c8d7e5;margin-top:7px}pre{background:#030b13;border-radius:10px;padding:14px;white-space:pre-wrap;overflow:auto}.notice{padding:13px;border-radius:10px;background:rgba(28,90,133,.18);border:1px solid rgba(52,168,232,.22);margin:12px 0}.footer{color:#72899f;font-size:12px;margin-top:28px;text-align:center}@media(max-width:1100px){.grid4{grid-template-columns:repeat(2,1fr)}.actions{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}}@media(max-width:760px){.shell{display:block}.side{position:relative;width:100%;height:auto}.main{padding:0 15px 30px}.top{margin:0 -15px 18px;padding:0 15px}.grid4,.actions{grid-template-columns:1fr}.hero h1{font-size:31px}}</style>'''
+def db():
+ c=sqlite3.connect(DB);c.row_factory=sqlite3.Row;return c
+def setting(k,d):
+ c=db()
+ for sql in ('SELECT v FROM settings WHERE k=?','SELECT value FROM settings WHERE key=?'):
+  try:
+   r=c.execute(sql,(k,)).fetchone()
+   if r:c.close();return list(r)[0]
+  except sqlite3.Error:pass
+ c.close();return d
 def cmd(*a):
- try:
-  p=subprocess.run(a,text=True,capture_output=True,timeout=15); return p.stdout.strip(),p.returncode
- except Exception as e:return str(e),1
+ try:return subprocess.run(a,text=True,capture_output=True,timeout=30)
+ except Exception as e:return subprocess.CompletedProcess(a,1,'',str(e))
+def online():return cmd('systemctl','is-active','--quiet','awg-quick@awg0').returncode==0
 def cfg():
  d={}
  if CONF.exists():
-  for x in CONF.read_text(errors='ignore').splitlines():
-   if '=' in x and not x.lstrip().startswith('#'):
-    k,v=x.split('=',1); d[k.strip()]=v.strip()
+  for line in CONF.read_text(errors='replace').split('[Peer]',1)[0].splitlines():
+   if '=' in line and not line.lstrip().startswith('#'):
+    k,v=line.split('=',1);d[k.strip()]=v.strip()
  return d
-def iface():return cmd('awg','show',WG)[1]==0 or cmd('ip','link','show',WG)[1]==0
-def db():
- BASE.mkdir(parents=True,exist_ok=True); c=sqlite3.connect(DB); c.execute('CREATE TABLE IF NOT EXISTS clients(id INTEGER PRIMARY KEY,name TEXT UNIQUE,address TEXT,private TEXT,public TEXT)'); c.commit(); return c
-def keys():
- priv,_=cmd('awg','genkey'); pub,_=cmd('bash','-lc',f"printf '%s' '{priv}' | awg pubkey"); return priv.strip(),pub.strip()
-def sync():
- if not CONF.exists():return
- cmd('awg-quick','strip',WG)
- try:cmd('systemctl','restart',f'awg-quick@{WG}')
- except:pass
-def conf_for(c):
- d=cfg(); host=cmd('curl','-4','-fsS','--max-time','5','https://api.ipify.org')[0] or 'SERVER_IP'; sp=d.get('PrivateKey',''); out='[Interface]\nPrivateKey = '+c[3]+'\nAddress = '+c[2]+'/32\nDNS = 1.1.1.1\nMTU = '+d.get('MTU','1380')+'\n\n[Peer]\nPublicKey = '+server_pub()+'\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = '+host+':'+d.get('ListenPort','1234')+'\nPersistentKeepalive = 25\n'; return out
-def server_pub():
- p=cfg().get('PrivateKey','');
- if not p:return ''
- return cmd('bash','-lc',f"printf '%s' '{p}' | awg pubkey")[0]
-def uri(c):
- d=cfg(); text=conf_for(c); o={'container':'amnezia-awg','awg':{'isThirdPartyConfig':True,'last_config':json.dumps({'config':text,'client_ip':c[2]+'/32','port':int(d.get('ListenPort','1234'))},separators=(',',':'))}}; raw=json.dumps({'containers':[o],'defaultContainer':'amnezia-awg','description':c[1]}).encode(); return 'vpn://'+base64.urlsafe_b64encode(struct.pack('>I',len(raw))+zlib.compress(raw)).decode().rstrip('=')
-LAY=CSS+'''<div class=app><aside class=side><div class=brand>▲ AWG Panel <span>6.7.2</span></div><nav class=nav><a href="/">🏠 Главная</a><a href="/clients">👥 Клиенты</a><a href="/obfuscation">🚀 Обфускация 3.1</a><a href="/mobile">📱 Mobile</a><a href="/logs">📋 Логи</a><a href="/about">ℹ️ О панели</a></nav></aside><main class=main><div class=top>AmneziaWG 3.1 · awg0 · <span class=ok>● ONLINE</span></div><div class=content>{% block content %}{% endblock %}</div></main></div>'''
-@app.route('/')
-def home():
- d=cfg(); c=db(); n=c.execute('select count(*) from clients').fetchone()[0]; c.close(); return render_template_string(LAY.replace('{% block content %}{% endblock %}','<section class=hero><h1>Добро пожаловать!</h1><p>AWG Panel 6.7.2 — мобильная свобода без границ.</p></section><div class=grid><div class="card metric">AWG статус<b class="ok">'+('ONLINE' if iface() else 'OFFLINE')+'</b></div><div class="card metric">Клиенты<b>'+str(n)+'</b></div><div class="card metric">Порт<b>'+d.get('ListenPort','1234')+'</b></div><div class="card metric">MTU<b>'+d.get('MTU','1380')+'</b></div></div><div class=card><h2>Strong Mobile</h2><p>AWG 3.1 · Header Protection · H1-H4 · S1-S4 · Jc/Jmin/Jmax · MTU 1380 · UDP 1234.</p></div>')
-@app.route('/clients',methods=['GET','POST'])
 def clients():
- c=db()
- if request.method=='POST':
-  name=request.form.get('name','client').strip(); exists=c.execute('select id from clients where name=?',(name,)).fetchone()
-  if not exists:
-   used={x[0] for x in c.execute('select address from clients')}; ip=2
-   while f'10.66.66.{ip}' in used:ip+=1
-   pr,pu=keys(); c.execute('insert into clients(name,address,private,public) values(?,?,?,?)',(name,f'10.66.66.{ip}',pr,pu)); c.commit()
- c2=c.execute('select * from clients order by id desc').fetchall(); c.close(); rows=''.join(f'<tr><td>{x[1]}</td><td>{x[2]}</td><td><a class=btn href="/clients/{x[0]}/conf">CONF</a> <a class=btn href="/clients/{x[0]}/qr">QR</a> <a class=btn href="/clients/{x[0]}/vpnuri">vpn://</a> <a class=btn href="/clients/{x[0]}/delete">Удалить</a></td></tr>' for x in c2); return render_template_string(LAY.replace('{% block content %}{% endblock %}',f'<div class=card><h2>Создать клиента</h2><form method=post><input name=name placeholder="phone-1" required><button>Создать</button></form></div><div class=card><h2>Клиенты</h2><table><tr><th>Имя</th><th>IP</th><th>Действия</th></tr>{rows}</table></div>'))
-@app.route('/clients/<int:i>/conf')
-def getconf(i):
- c=db().execute('select * from clients where id=?',(i,)).fetchone();
- if not c:return 'Not found',404
- return Response(conf_for(c),mimetype='text/plain',headers={'Content-Disposition':f'attachment; filename="{c[1]}.conf"'})
-@app.route('/clients/<int:i>/vpnuri')
-def geturi(i):
- c=db().execute('select * from clients where id=?',(i,)).fetchone(); return Response(uri(c),mimetype='text/plain') if c else ('Not found',404)
-@app.route('/clients/<int:i>/qr')
-def qr(i):
- c=db().execute('select * from clients where id=?',(i,)).fetchone();
- if not c:return 'Not found',404
- p=subprocess.run(['qrencode','-t','PNG','-o','-'],input=uri(c).encode(),capture_output=True); return Response(p.stdout,mimetype='image/png')
-@app.route('/clients/<int:i>/delete')
-def delete(i):
- c=db();c.execute('delete from clients where id=?',(i,));c.commit();c.close();return redirect('/clients')
+ c=db();r=c.execute('SELECT * FROM clients ORDER BY id').fetchall();c.close();return r
+def menu(path):
+ items=[('⌂','Главная','/'),('♣','Клиенты','/clients'),('▤','Конфигурация','/config'),('◇','Обфускация 3.1','/obfuscation'),('⌘','Сеть и порты','/network'),('▣','Резервные копии','/backups'),('☷','Логи','/logs'),('⚙','Настройки','/settings'),('ⓘ','О панели','/about')]
+ return ''.join('<a class="%s" href="%s">%s&nbsp;&nbsp;%s</a>'%('active' if path==u else '',u,i,n) for i,n,u in items)
+def layout(title,body,path):
+ it=cfg();return render_template_string(CSS+'''<div class=shell><aside class=side><div class=brand><div class=logo>AW</div><div><h2>AWG Panel <span>7.1</span></h2><small>Mobile | AWG 3.1 Strong</small></div></div><nav class=menu>{{menu|safe}}</nav><div class=sidebox><span class=dot></span>Статус сервера<div style="font-size:18px;margin-top:9px">AWG: <b class="{{'ok' if on else 'bad'}}">{{'online' if on else 'offline'}}</b></div><div class=muted style="margin-top:8px">Интерфейс: awg0<br>Порт: {{port}} (UDP)<br>Клиентов: {{count}}</div></div></aside><main class=main><header class=top><div>{{title}}</div><div class=right><span class=pill><span class=dot></span>{{'Система: OK' if on else 'AWG offline'}}</span><a class=btn href=/logout>↪ Выйти</a></div></header><div class=wrap>{{body|safe}}<div class=footer>AWG Panel 7.1 | AmneziaWG 3.1 | FREE YOUR MIND</div></div></main></div>''',menu=menu(path),title=title,body=body,on=online(),port=it.get('ListenPort','-'),count=len(clients()))
+@app.before_request
+def auth():
+ if request.path not in ('/login','/background.jpg') and not session.get('logged'):return redirect('/login')
+@app.route('/background.jpg')
+def background():return send_file(BG,mimetype='image/jpeg',max_age=0)
+@app.route('/login',methods=['GET','POST'])
+def login():
+ if request.method=='POST' and request.form.get('login')==setting('login','admin') and request.form.get('password')==setting('password','change-me'):
+  session['logged']=True;return redirect('/')
+ return render_template_string(CSS+'''<div class=wrap style="max-width:500px;margin:100px auto"><div class=card><div class=brand><div class=logo>AW</div><div><h2>AWG Panel <span style="color:#17e6a0">7.1</span></h2><small>Mobile | AWG 3.1 Strong</small></div></div><form method=post><label>Логин</label><input name=login><label>Пароль</label><input name=password type=password><button>Войти</button></form></div></div>''')
+@app.route('/logout')
+def logout():session.clear();return redirect('/login')
+@app.route('/')
+def dashboard():
+ it=cfg();body=render_template_string('''<section class=hero><div><div class=eyebrow>AMNEZIAWG</div><h1>Добро пожаловать!</h1><p>AWG Panel 7.1 — мобильная свобода без границ.</p><p style="margin-top:7px">Стабильный, быстрый и защищённый доступ в интернет.</p></div><div class=pill>UDP <b>{{port}}</b> · MTU <b>{{mtu}}</b></div></section><div class=grid4><div class=card><div class=klabel>Статус AWG</div><div class="kvalue {{'ok' if on else 'bad'}}">{{'online' if on else 'offline'}}</div><div class=muted>интерфейс awg0</div></div><div class=card><div class=klabel>Клиенты</div><div class=kvalue>{{count}}</div><div class=muted>зарегистрированных</div></div><div class=card><div class=klabel>Порт</div><div class=kvalue>{{port}}</div><div class=muted>UDP · MTU {{mtu}}</div></div><div class=card><div class=klabel>Обфускация</div><div class=kvalue>3.1 Strong</div><div class=muted>Header Protection {{'ON' if hpk else 'OFF'}}</div></div></div><div class=card style="margin-top:16px"><h2>⚡ Быстрые действия</h2><div class=actions><a class="action green" href=/obfuscation>🚀<strong>Strong Mobile</strong><span class=muted>Проверить и применить профиль</span></a><a class="action blue" href=/clients>♟<strong>Добавить клиента</strong><span class=muted>Создать AWG 3.1 конфигурацию</span></a><a class="action purple" href=/config>⚙<strong>Конфигурация</strong><span class=muted>Посмотреть параметры</span></a><a class="action orange" href=/backups>↓<strong>Резервная копия</strong><span class=muted>Сохранить конфигурацию</span></a></div></div><div class=two><div class=card><h2>Информация о сервере</h2><table><tr><td>AWG</td><td>{{'ONLINE' if on else 'OFFLINE'}}</td></tr><tr><td>Порт</td><td>{{port}} UDP</td></tr><tr><td>MTU</td><td>{{mtu}}</td></tr><tr><td>S1-S4</td><td>16 / 24 / 16 / 32</td></tr><tr><td>RandomTrailers</td><td>ON</td></tr><tr><td>DisableCookies</td><td>ON</td></tr></table></div><div class=card><h2>Профиль</h2><p class=muted>Strong Mobile оптимизирован для нестабильных мобильных сетей 4G/5G.</p><div class=notice>HeaderProtectionKey: {{'включён' if hpk else 'не найден'}}</div></div></div>''',on=online(),count=len(clients()),port=it.get('ListenPort','-'),mtu=it.get('MTU','-'),hpk=it.get('HeaderProtectionKey',''));return layout('Главная',body,'/')
+@app.route('/clients')
+def clients_page():
+ body=render_template_string('''<div class=hero><div><div class=eyebrow>CLIENTS</div><h1>Клиенты</h1><p>AWG 3.1 конфигурации.</p></div></div><div class=card><h2>Новый клиент</h2><form method=post action=/clients/create><label>Имя</label><input name=name placeholder="Android-02" required><button>+ Создать клиента</button></form></div><div class=card style="margin-top:16px"><table><tr><th>ID</th><th>Имя</th><th>Адрес</th><th>Действия</th></tr>{% for r in rows %}<tr><td>{{r.id}}</td><td>{{r.name}}</td><td>{{r.address}}</td><td><a class="btn small" href="/clients/{{r.id}}/conf">CONF</a> <a class="btn small" href="/clients/{{r.id}}/qr">QR</a></td></tr>{% else %}<tr><td colspan=4 class=muted>Клиентов пока нет</td></tr>{% endfor %}</table></div>''',rows=clients());return layout('Клиенты',body,'/clients')
+@app.route('/clients/create',methods=['POST'])
+def create_client():
+ name=request.form.get('name','').strip();c=db()
+ if c.execute('SELECT 1 FROM clients WHERE name=?',(name,)).fetchone():c.close();return Response("<script>alert('Клиент с таким именем уже существует. Выберите другое имя.');location='/clients'</script>",status=409)
+ used={int(m.group(1)) for r in c.execute('SELECT address FROM clients') for m in [re.search(r'10\.66\.66\.(\d+)',r['address'] or '')] if m};addr=next((f'10.66.66.{n}/32' for n in range(2,255) if n not in used),None)
+ if not addr:c.close();return 'Нет свободных адресов',500
+ priv=cmd('awg','genkey').stdout.strip();pub=cmd('bash','-lc',f"printf '%s' '{priv}' | awg pubkey").stdout.strip();psk=cmd('awg','genpsk').stdout.strip();c.execute('INSERT INTO clients(name,address,private_key,public_key,psk,created) VALUES(?,?,?,?,?,?)',(name,addr,priv,pub,psk,int(time.time())));c.commit();row=c.execute('SELECT * FROM clients WHERE name=?',(name,)).fetchone();c.close()
+ old=CONF.read_text() if CONF.exists() else '';bak=CONF.with_name(CONF.name+'.bak-client-'+time.strftime('%Y%m%d-%H%M%S'))
+ if CONF.exists():bak.write_text(old)
+ CONF.write_text(old.rstrip()+f'\n\n[Peer]\nPublicKey = {pub}\nPresharedKey = {psk}\nAllowedIPs = {addr}\n');r=cmd('systemctl','restart','awg-quick@awg0')
+ if r.returncode:CONF.write_text(old);cmd('systemctl','restart','awg-quick@awg0');return 'AWG не принял нового клиента; сервер восстановлен.',500
+ return redirect('/clients')
+def client_config(row):
+ it=cfg();endpoint=setting('endpoint','') or ((cmd('hostname','-I').stdout.split() or ['SERVER_IP'])[0]);L=['[Interface]',f"PrivateKey = {row['private_key']}",f"Address = {row['address']}",'DNS = 1.1.1.1',f"MTU = {it.get('MTU','1380')}",f"Jc = {it.get('Jc','4')}",f"Jmin = {it.get('Jmin','40')}",f"Jmax = {it.get('Jmax','120')}",f"S1 = {it.get('S1','16')}",f"S2 = {it.get('S2','24')}",f"S3 = {it.get('S3','16')}",f"S4 = {it.get('S4','32')}",f"H1 = {it.get('H1','1')}",f"H2 = {it.get('H2','2')}",f"H3 = {it.get('H3','3')}",f"H4 = {it.get('H4','4')}"]
+ for k in ('HeaderProtectionKey','ContentPaddingAddition','RekeyAfterTime','RekeyTimeout','RejectAfterTime','KeepaliveTimeout','MaxHandshakeAttempts','RandomTrailers','DisableCookies'):
+  if it.get(k):L.append(f'{k} = {it[k]}')
+ L += ['', '[Peer]',f'PublicKey = {server_public()}',f"PresharedKey = {row['psk']}",'AllowedIPs = 0.0.0.0/0',f"Endpoint = {endpoint}:{it.get('ListenPort','1234')}",'PersistentKeepalive = 25'];return '\n'.join(L)+'\n'
+def server_public():return cmd('awg','show','awg0','public-key').stdout.strip()
+@app.route('/clients/<int:cid>/conf')
+def conf(cid):
+ c=db();r=c.execute('SELECT * FROM clients WHERE id=?',(cid,)).fetchone();c.close()
+ if not r:return 'Not found',404
+ return Response(client_config(r),mimetype='text/plain',headers={'Content-Disposition':f"attachment; filename={r['name']}.conf"})
+@app.route('/clients/<int:cid>/qr')
+def qr(cid):
+ c=db();r=c.execute('SELECT * FROM clients WHERE id=?',(cid,)).fetchone();c.close()
+ if not r:return 'Not found',404
+ b=io.BytesIO();qrcode.make(client_config(r)).save(b,format='PNG');b.seek(0);return send_file(b,mimetype='image/png')
+@app.route('/config')
+def config():
+ txt=CONF.read_text(errors='replace') if CONF.exists() else 'Конфигурация не найдена.';return layout('Конфигурация',render_template_string('''<div class=hero><div><div class=eyebrow>CONFIGURATION</div><h1>Конфигурация</h1><p>Текущий серверный конфиг.</p></div></div><div class=card><a class=btn href=/config/download>Скачать awg0.conf</a> <a class="btn alt" href=/restart>Перезапустить AWG</a><pre>{{txt}}</pre></div>''',txt=txt),'/config')
+@app.route('/config/download')
+def config_download():return send_file(CONF,as_attachment=True,download_name='awg0.conf') if CONF.exists() else ('Not found',404)
 @app.route('/obfuscation',methods=['GET','POST'])
-def obf():
- msg=''
- if request.method=='POST' and CONF.exists():
-  old=CONF.read_text(); d=cfg(); d.update({'ListenPort':'1234','MTU':'1380','Jc':'4','Jmin':'40','Jmax':'120','S1':'16','S2':'24','S3':'16','S4':'32','H1':'1','H2':'2','H3':'3','H4':'4','ContentPaddingAddition':'0-64','RandomTrailers':'on','DisableCookies':'on','RekeyAfterTime':'120-180','RekeyTimeout':'3-8','RejectAfterTime':'150-210','KeepaliveTimeout':'8-15','MaxHandshakeAttempts':'8-15'}); CONF.with_name('awg0.conf.bak').write_text(old); lines=['[Interface]']+[f'{k} = {v}' for k,v in d.items() if k not in ('PrivateKey','Address') and v]; lines.insert(1,'PrivateKey = '+d.get('PrivateKey','')); lines.insert(2,'Address = '+d.get('Address','10.66.66.1/24')); CONF.write_text('\n'.join(lines)+'\n'); sync(); msg='<div class="card ok">Strong Mobile профиль применён.</div>'
- return render_template_string(LAY.replace('{% block content %}{% endblock %}',f'<div class=card><h2>🚀 Strong Mobile</h2><p>AWG 3.1: Header Protection, H1-H4, S1-S4, padding, RandomTrailers, DisableCookies, Jc/Jmin/Jmax.</p>{msg}<form method=post><button>Применить Strong Mobile</button></form></div><div class=card><pre>'+json.dumps(cfg(),ensure_ascii=False,indent=2)+'</pre></div>'))
-@app.route('/mobile')
-def mobile():return render_template_string(LAY.replace('{% block content %}{% endblock %}','<div class=card><h2>📱 Mobile 4G/5G</h2><p>Рекомендуется MTU 1380, UDP 1234, PersistentKeepalive 25.</p></div>'))
+def obfuscation():
+ if request.method=='POST':
+  old=CONF.read_text();bak=CONF.with_name(CONF.name+'.bak-strong-'+time.strftime('%Y%m%d-%H%M%S'));bak.write_text(old);vals={'ListenPort':'1234','MTU':'1380','Jc':'4','Jmin':'40','Jmax':'120','S1':'16','S2':'24','S3':'16','S4':'32','H1':'1','H2':'2','H3':'3','H4':'4','ContentPaddingAddition':'0-64','RandomTrailers':'on','DisableCookies':'on','RekeyAfterTime':'120-180','RekeyTimeout':'3-8','RejectAfterTime':'150-210','KeepaliveTimeout':'8-15','MaxHandshakeAttempts':'8-15'};head,*rest=old.split('[Peer]',1);out=[x for x in head.splitlines() if not any(x.strip().startswith(k+' ') or x.strip().startswith(k+'=') for k in vals)];out += [f'{k} = {v}' for k,v in vals.items()];CONF.write_text('\n'.join(out).rstrip()+'\n'+(('\n[Peer]'+rest[0]) if rest else ''));r=cmd('systemctl','restart','awg-quick@awg0')
+  if r.returncode:CONF.write_text(old);cmd('systemctl','restart','awg-quick@awg0');return 'Strong Mobile не применён; исходный конфиг восстановлен.',500
+  return redirect('/')
+ it=cfg();vals={k:it.get(k,'-') for k in ('ListenPort','MTU','Jc','Jmin','Jmax','S1','S2','S3','S4','H1','H2','H3','H4','HeaderProtectionKey','ContentPaddingAddition','RandomTrailers','DisableCookies','RekeyAfterTime','RekeyTimeout','RejectAfterTime','KeepaliveTimeout','MaxHandshakeAttempts')};return layout('Обфускация 3.1',render_template_string('''<div class=hero><div><div class=eyebrow>AMNEZIAWG 3.1</div><h1>Обфускация 3.1</h1><p>Strong Mobile.</p></div></div><div class=notice>S1–S4: 16 / 24 / 16 / 32 — значения, которые уже успешно запускаются на текущем AWG.</div><div class=card><table>{% for k,v in vals.items() %}<tr><td>{{k}}</td><td>{{v}}</td></tr>{% endfor %}</table><form method=post style="margin-top:18px"><button>🚀 Применить Strong Mobile</button></form></div>''',vals=vals),'/obfuscation')
+@app.route('/network')
+def network():
+ it=cfg();return layout('Сеть и порты',render_template_string('''<div class=hero><div><div class=eyebrow>NETWORK</div><h1>Сеть и порты</h1></div></div><div class=card><table>{% for k,v in rows %}<tr><td>{{k}}</td><td>{{v}}</td></tr>{% endfor %}</table></div>''',rows=[('Интерфейс','awg0'),('ListenPort',it.get('ListenPort','-')+' UDP'),('MTU',it.get('MTU','-')),('Адрес','10.66.66.1/24'),('Статус','ONLINE' if online() else 'OFFLINE')]),'/network')
+@app.route('/backups')
+def backups():
+ files=sorted([p.name for p in CONF.parent.glob('awg0.conf.bak*')],reverse=True)[:40] if CONF.parent.exists() else [];return layout('Резервные копии',render_template_string('''<div class=hero><div><div class=eyebrow>BACKUPS</div><h1>Резервные копии</h1></div></div><div class=card><a class=btn href=/backups/create>💾 Создать backup</a><table style="margin-top:15px"><tr><th>Файл</th><th>Размер</th></tr>{% for n in files %}<tr><td>{{n}}</td><td>{{(base/n).stat().st_size}} bytes</td></tr>{% endfor %}</table></div>''',files=files,base=CONF.parent),'/backups')
+@app.route('/backups/create')
+def backup_create():
+ import shutil
+ if CONF.exists():shutil.copy2(CONF,CONF.with_name('awg0.conf.bak-'+time.strftime('%Y%m%d-%H%M%S')))
+ if DB.exists():shutil.copy2(DB,DB.with_name('panel.db.bak-'+time.strftime('%Y%m%d-%H%M%S')))
+ return redirect('/backups')
 @app.route('/logs')
-def logs():return render_template_string(LAY.replace('{% block content %}{% endblock %}', '<div class=card><h2>Логи</h2><pre>'+cmd('journalctl','-u','awg-quick@awg0','-n','100','--no-pager')[0]+'</pre></div>'))
+def logs():
+ r=cmd('journalctl','-u','awg-quick@awg0','-n','150','--no-pager');return layout('Логи',render_template_string('''<div class=hero><div><div class=eyebrow>LOGS</div><h1>Логи</h1></div></div><div class=card><pre>{{txt}}</pre></div>''',txt=r.stdout+r.stderr),'/logs')
+@app.route('/settings',methods=['GET','POST'])
+def settings():
+ if request.method=='POST':
+  c=db();login=request.form.get('login','admin');endpoint=request.form.get('endpoint','')
+  try:c.execute("UPDATE settings SET v=? WHERE k='login'",(login,))
+  except sqlite3.Error:pass
+  try:c.execute("UPDATE settings SET v=? WHERE k='endpoint'",(endpoint,))
+  except sqlite3.Error:pass
+  c.commit();c.close();return redirect('/settings')
+ return layout('Настройки',render_template_string('''<div class=hero><div><div class=eyebrow>SETTINGS</div><h1>Настройки</h1></div></div><div class=card><form method=post><label>Логин</label><input name=login value="{{login}}"><label>Endpoint IP / домен</label><input name=endpoint value="{{endpoint}}" placeholder="1.2.3.4"><button>Сохранить</button></form></div>''',login=setting('login','admin'),endpoint=setting('endpoint','')),'/settings')
 @app.route('/about')
-def about():return render_template_string(LAY.replace('{% block content %}{% endblock %}','<div class=card><h1>О панели</h1><p>AWG Panel 6.7.2 Stable</p><table><tr><td>Платформа</td><td>AmneziaWG 3.1</td></tr><tr><td>Профиль</td><td>Strong Mobile</td></tr><tr><td>Интерфейс</td><td>awg0</td></tr></table></div>'))
-if __name__=='__main__':app.run('0.0.0.0',8080)
+def about():
+ it=cfg();return layout('О панели',render_template_string('''<div class=hero><div><div class=eyebrow>FREE YOUR MIND</div><h1>О панели</h1><p>AWG Panel 7.1 — AmneziaWG 3.1.</p></div></div><div class=two><div class=card><h2>AWG Panel 7.1</h2><table><tr><td>AmneziaWG</td><td>3.1</td></tr><tr><td>Интерфейс</td><td>awg0</td></tr><tr><td>Статус</td><td>{{'ONLINE' if on else 'OFFLINE'}}</td></tr><tr><td>Порт</td><td>{{port}} UDP</td></tr></table></div><div class=card><h2>FREE YOUR MIND</h2><p class=muted>Чистый фон без задвоения интерфейса. «О панели» и «Логи» — отдельные страницы.</p></div></div>''',on=online(),port=it.get('ListenPort','-')),'/about')
+@app.route('/restart')
+def restart():cmd('systemctl','restart','awg-quick@awg0');return redirect('/')
+@app.route('/api/metrics')
+def metrics():return jsonify({'awg_online':online(),'clients':len(clients()),'port':cfg().get('ListenPort'),'mtu':cfg().get('MTU')})
+if __name__=='__main__':app.run(host='0.0.0.0',port=8080)
