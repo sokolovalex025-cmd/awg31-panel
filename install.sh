@@ -36,7 +36,7 @@ KERNEL_VERSION=$(cat /sys/module/amneziawg/version 2>/dev/null || true)
 echo "AmneziaWG: ${AWG_VERSION:-unknown}; kernel=${KERNEL_VERSION:-unknown}"
 
 # Create a valid server interface on a fresh install.
-# Existing user configuration is preserved.
+# Existing user configuration is preserved, but AWG 3.1 boolean syntax is repaired.
 if [ ! -s "$CONF" ]; then
   SERVER_PRIVATE_KEY=$(awg genkey)
   SERVER_PUBLIC_KEY=$(printf '%s' "$SERVER_PRIVATE_KEY" | awg pubkey)
@@ -61,8 +61,8 @@ H2 = 2
 H3 = 3
 H4 = 4
 HeaderProtectionKey = $HEADER_KEY
-RandomTrailers = true
-DisableCookies = true
+RandomTrailers = on
+DisableCookies = on
 PostUp = iptables -A FORWARD -i awg0 -j ACCEPT; iptables -A FORWARD -o awg0 -j ACCEPT; iptables -t nat -A POSTROUTING -s 10.66.66.0/24 -o $WAN_IF -j MASQUERADE
 PostDown = iptables -D FORWARD -i awg0 -j ACCEPT; iptables -D FORWARD -o awg0 -j ACCEPT; iptables -t nat -D POSTROUTING -s 10.66.66.0/24 -o $WAN_IF -j MASQUERADE
 EOF
@@ -71,6 +71,14 @@ EOF
   chmod 600 /etc/awg31-panel/server_public.key
 fi
 chmod 600 "$CONF"
+
+# AWG 3.1 accepts on/off (or 0/1), not true/false.
+sed -i \
+  -e 's/^[[:space:]]*RandomTrailers[[:space:]]*=[[:space:]]*true[[:space:]]*$/RandomTrailers = on/' \
+  -e 's/^[[:space:]]*RandomTrailers[[:space:]]*=[[:space:]]*false[[:space:]]*$/RandomTrailers = off/' \
+  -e 's/^[[:space:]]*DisableCookies[[:space:]]*=[[:space:]]*true[[:space:]]*$/DisableCookies = on/' \
+  -e 's/^[[:space:]]*DisableCookies[[:space:]]*=[[:space:]]*false[[:space:]]*$/DisableCookies = off/' \
+  "$CONF"
 
 # Enable forwarding for VPN clients.
 sysctl -w net.ipv4.ip_forward=1 >/dev/null
