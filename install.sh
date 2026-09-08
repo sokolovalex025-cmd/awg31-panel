@@ -36,12 +36,12 @@ if [ ! -f "$CONF" ]; then echo "AWG config was not created: $CONF"; exit 1; fi
 
 mkdir -p "$BASE"
 [ -f "$BASE/app.py" ] && cp -a "$BASE/app.py" "$BASE/app.py.bak.$TS"
-[ -f "$BASE/background.jpg" ] && cp -a "$BASE/background.jpg" "$BASE/background.jpg.bak.$TS"
+[ -f "$BASE/background.svg" ] && cp -a "$BASE/background.svg" "$BASE/background.svg.bak.$TS"
 [ -f "$BASE/panel.db" ] && cp -a "$BASE/panel.db" "$BASE/panel.db.bak.$TS"
 cp -a "$CONF" "$CONF.bak-panel7.1-$TS"
 cp "$SRC/app.py" "$BASE/app.py"
-cp "$SRC/background.jpg" "$BASE/background.jpg"
-chmod 755 "$BASE/app.py"; chmod 644 "$BASE/background.jpg"
+cp "$SRC/background.svg" "$BASE/background.svg"
+chmod 755 "$BASE/app.py"; chmod 644 "$BASE/background.svg"
 
 python3 - "$CONF" <<'PY'
 import sys, re, subprocess
