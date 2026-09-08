@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import os,re,json,subprocess,shutil
 from pathlib import Path
-from flask import request,redirect,send_file,Response
+from flask import request,redirect,Response
 BASE=Path('/opt/awg31-panel'); NP=Path('/etc/naiveproxy'); CFG=NP/'Caddyfile'; META=NP/'panel.json'; BIN=Path('/usr/local/bin/caddy-naive'); SERVICE='naiveproxy.service'
 def run(*args,timeout=30):
  try:return subprocess.run(args,text=True,capture_output=True,timeout=timeout)
@@ -16,7 +16,7 @@ def install(domain,email,user,password,port):
  if not valid_domain(domain):return False,'Некорректный домен.'
  if not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+',email):return False,'Некорректный email.'
  if not valid_token(user):return False,'Некорректный логин.'
- if len(password)<8 or any(c.isspace() for c in password):return False,'Пароль должен содержать минимум 8 символов без пробелов.'
+ if not re.fullmatch(r'[A-Za-z0-9._-]{8,64}',password):return False,'Пароль: 8–64 символа A-Z/a-z/0-9/._-.'
  try:port=int(port)
  except:return False,'Некорректный порт.'
  if not 1<=port<=65535:return False,'Некорректный порт.'
@@ -33,8 +33,8 @@ def install(domain,email,user,password,port):
  shutil.copy2(tmp/'caddy-naive',BIN);os.chmod(BIN,0o755);run('setcap','cap_net_bind_service=+ep',str(BIN))
  if run('getent','passwd','caddy').returncode:run('useradd','--system','--home','/var/lib/caddy','--shell','/usr/sbin/nologin','caddy')
  Path('/var/lib/caddy').mkdir(parents=True,exist_ok=True);run('chown','-R','caddy:caddy','/var/lib/caddy')
- web=Path('/var/www/naiveproxy');web.mkdir(parents=True,exist_ok=True);(web/'index.html').write_text('<!doctype html><meta charset="utf-8"><title>AWG Panel</title><style>body{background:#06101d;color:#dcecff;font:18px sans-serif;display:grid;place-items:center;height:100vh}main{padding:40px;border:1px solid #24506e;border-radius:18px;background:#071a2b}</style><main><h1>AWG Panel</h1><p>Service is running.</p></main>')
- CFG.write_text(f'''{{\n    order forward_proxy before file_server\n    email {email}\n}}\n\n:{port}, {domain} {{\n    encode\n    forward_proxy {{\n        basic_auth {user} {password}\n        hide_ip\n        hide_via\n        probe_resistance\n    }}\n    file_server {{\n        root /var/www/naiveproxy\n    }}\n}}\n''');os.chmod(CFG,0o640)
+ web=Path('/var/www/naiveproxy');web.mkdir(parents=True,exist_ok=True);run('chown','-R','caddy:caddy','/var/www/naiveproxy');(web/'index.html').write_text('<!doctype html><meta charset="utf-8"><title>AWG Panel</title><style>body{background:#06101d;color:#dcecff;font:18px sans-serif;display:grid;place-items:center;height:100vh}main{padding:40px;border:1px solid #24506e;border-radius:18px;background:#071a2b}</style><main><h1>AWG Panel</h1><p>Service is running.</p></main>');run('chown','caddy:caddy',str(web/'index.html'))
+ CFG.write_text(f'''{{\n    order forward_proxy before file_server\n    email {email}\n}}\n\n:{port}, {domain} {{\n    encode\n    forward_proxy {{\n        basic_auth {user} {password}\n        hide_ip\n        hide_via\n        probe_resistance\n    }}\n    file_server {{\n        root /var/www/naiveproxy\n    }}\n}}\n''');os.chown(CFG,0,__import__('grp').getgrnam('caddy').gr_gid);os.chmod(CFG,0o640)
  META.write_text(json.dumps({'domain':domain,'email':email,'user':user,'port':port},ensure_ascii=False,indent=2));os.chmod(META,0o600)
  sec=NP/'password';sec.write_text(password+'\n');os.chmod(sec,0o600)
  Path('/etc/systemd/system/'+SERVICE).write_text('''[Unit]\nDescription=NaiveProxy Caddy server for AWG Panel\nAfter=network-online.target\nWants=network-online.target\n[Service]\nUser=caddy\nGroup=caddy\nExecStart=/usr/local/bin/caddy-naive run --environ --config /etc/naiveproxy/Caddyfile\nExecReload=/usr/local/bin/caddy-naive reload --config /etc/naiveproxy/Caddyfile\nRestart=on-failure\nRestartSec=3\nLimitNOFILE=1048576\nAmbientCapabilities=CAP_NET_BIND_SERVICE\nNoNewPrivileges=true\n[Install]\nWantedBy=multi-user.target\n''')
