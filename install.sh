@@ -5,30 +5,30 @@ export DEBIAN_FRONTEND=noninteractive
 . /etc/os-release
 [ "${ID:-}" = ubuntu ] || { echo 'Требуется Ubuntu'; exit 1; }
 BASE=/opt/awg31-panel; SRC="$(cd "$(dirname "$0")" && pwd)"; TS=$(date +%Y%m%d-%H%M%S)
-mkdir -p "$BASE/backups" /etc/amnezia/amneziawg/clients
-[ -f "$BASE/app.py" ] && cp -a "$BASE/app.py" "$BASE/backups/app-before-7.2-$TS.py"
-[ -f "$BASE/panel.db" ] && cp -a "$BASE/panel.db" "$BASE/backups/panel-before-7.2-$TS.db"
-[ -f /etc/amnezia/amneziawg/awg0.conf ] && cp -a /etc/amnezia/amneziawg/awg0.conf "$BASE/backups/awg0-before-7.2-$TS.conf"
+mkdir -p "$BASE/backups" /etc/amnezia/amneziawg/clients /etc/awg31-panel
+[ -f "$BASE/app.py" ] && cp -a "$BASE/app.py" "$BASE/backups/app-before-7.3-$TS.py"
+[ -f "$BASE/panel.db" ] && cp -a "$BASE/panel.db" "$BASE/backups/panel-before-7.3-$TS.db"
+[ -f /etc/amnezia/amneziawg/awg0.conf ] && cp -a /etc/amnezia/amneziawg/awg0.conf "$BASE/backups/awg0-before-7.3-$TS.conf"
 apt-get update
 apt-get install -y python3 python3-venv python3-pip curl iproute2 qrencode openssl iptables
 command -v awg >/dev/null 2>&1 || { echo 'AmneziaWG 3.1 не найден. Установите AWG и повторите.'; exit 1; }
 cp "$SRC/app.py" "$BASE/app.py"; chmod 600 "$BASE/app.py"
 [ -f "$SRC/background.svg" ] && cp "$SRC/background.svg" "$BASE/background.svg"
 [ -f "$SRC/naiveproxy_panel.py" ] && cp "$SRC/naiveproxy_panel.py" "$BASE/naiveproxy_panel.py"; chmod 600 "$BASE/naiveproxy_panel.py"
+[ -f "$SRC/telegram_bot.py" ] && cp "$SRC/telegram_bot.py" "$BASE/telegram_bot.py"; chmod 600 "$BASE/telegram_bot.py"
 python3 - "$BASE/app.py" <<'PY'
 from pathlib import Path
 p=Path(__import__('sys').argv[1]); s=p.read_text()
-s=s.replace('AWG Panel 7.1','AWG Panel 7.2').replace('v=71','v=72')
-if 'naiveproxy_panel.register(app)' not in s:
-    marker='if __name__ == "__main__":'
-    add='import naiveproxy_panel\nnaiveproxy_panel.register(app)\n'
-    if marker in s:
-        s=s.replace(marker,add+marker,1)
-    else:
-        i=s.rfind('app.run(')
-        if i>=0:s=s[:i]+add+s[i:]
-        else:s+='\n'+add
-    p.write_text(s)
+s=s.replace('AWG Panel 7.1','AWG Panel 7.3').replace('AWG Panel 7.2','AWG Panel 7.3').replace('v=71','v=73').replace('v=72','v=73')
+adds=[]
+if 'naiveproxy_panel.register(app)' not in s: adds.append('import naiveproxy_panel\nnaiveproxy_panel.register(app)\n')
+if 'telegram_bot.register(app)' not in s: adds.append('import telegram_bot\ntelegram_bot.register(app)\n')
+if adds:
+ marker='if __name__ == "__main__":'; add=''.join(adds)
+ if marker in s:s=s.replace(marker,add+marker,1)
+ else:
+  i=s.rfind('app.run('); s=s[:i]+add+s[i:] if i>=0 else s+'\n'+add
+p.write_text(s)
 PY
 NEW_DB=0; [ -f "$BASE/panel.db" ] || NEW_DB=1
 python3 - "$BASE/panel.db" <<'PY'
@@ -54,11 +54,11 @@ PY
 fi
 python3 -m venv "$BASE/venv"
 "$BASE/venv/bin/pip" install -q 'Flask>=3,<4' 'qrcode[pil]>=7,<9'
-"$BASE/venv/bin/python" -m py_compile "$BASE/app.py" "$BASE/naiveproxy_panel.py"
+"$BASE/venv/bin/python" -m py_compile "$BASE/app.py" "$BASE/naiveproxy_panel.py" "$BASE/telegram_bot.py"
 SECRET=$(openssl rand -hex 32)
 cat >/etc/systemd/system/awgpanel.service <<EOF
 [Unit]
-Description=AWG Panel 7.2 Mobile Strong + NaiveProxy
+Description=AWG Panel 7.3 Mobile Strong + NaiveProxy + Telegram
 After=network-online.target awg-quick@awg0.service
 Wants=network-online.target
 [Service]
@@ -71,8 +71,25 @@ RestartSec=2
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl daemon-reload; systemctl enable --now awgpanel; sleep 2
+cat >/etc/systemd/system/awgpanel-telegram.service <<EOF
+[Unit]
+Description=AWG Panel Telegram Bot
+After=network-online.target awgpanel.service
+Wants=network-online.target
+[Service]
+WorkingDirectory=$BASE
+EnvironmentFile=-/etc/awg31-panel/telegram.env
+ExecStart=$BASE/venv/bin/python $BASE/telegram_bot.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=false
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload; systemctl enable --now awgpanel; systemctl disable --now awgpanel-telegram.service >/dev/null 2>&1 || true
+sleep 2
 systemctl is-active --quiet awgpanel || { journalctl -u awgpanel -n 80 --no-pager; exit 1; }
 IP=$(curl -4 -fsS --max-time 5 https://api.ipify.org || true)
-echo "AWG Panel 7.2: http://${IP}:8080/login"; echo "Login: admin"; if [ -f "$BASE/.initial_password" ]; then echo "Password: $(cat "$BASE/.initial_password")"; else echo 'Password: existing password preserved'; fi
-echo 'NaiveProxy: откройте раздел «NaïveProxy» в панели для установки.'
+echo "AWG Panel 7.3: http://${IP}:8080/login"; echo "Login: admin"; if [ -f "$BASE/.initial_password" ]; then echo "Password: $(cat "$BASE/.initial_password")"; else echo 'Password: existing password preserved'; fi
+echo 'NaiveProxy: раздел «NaïveProxy» в панели.'
+echo 'Telegram: раздел «Telegram Bot» в панели; бот запускается после сохранения token + Telegram ID.'
