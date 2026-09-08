@@ -49,27 +49,15 @@ echo "AmneziaWG найден: ${AWG_VERSION:-userspace неизвестен}; ke
 cp "$SRC/app.py" "$BASE/app.py"; chmod 600 "$BASE/app.py"
 [ -f "$SRC/background.svg" ] && cp "$SRC/background.svg" "$BASE/background.svg"
 for mod in naiveproxy_panel.py telegram_bot.py system_panel.py advanced_panel.py; do [ -f "$SRC/$mod" ] && cp "$SRC/$mod" "$BASE/$mod" && chmod 600 "$BASE/$mod"; done
-python3 - "$BASE/app.py" <<'PY'
-from pathlib import Path
-p=Path(__import__('sys').argv[1]);s=p.read_text()
-for a,b in [('AWG Panel 7.1','AWG Panel 8.1'),('AWG Panel 7.2','AWG Panel 8.1'),('AWG Panel 7.3','AWG Panel 8.1'),('AWG Panel 7.4','AWG Panel 8.1'),('AWG Panel 8.0','AWG Panel 8.1'),('v=71','v=81'),('v=72','v=81'),('v=73','v=81'),('v=74','v=81'),('v=80','v=81')]:s=s.replace(a,b)
-# Make helper modules importing `app` resolve to the running app.py module.
-if 'sys.modules.setdefault("app", sys.modules[__name__])' not in s:
- s=s.replace('from flask import', 'import sys\nsys.modules.setdefault("app", sys.modules[__name__])\n\nfrom flask import', 1)
-adds=[]
-for mod in ('naiveproxy_panel','telegram_bot','system_panel','advanced_panel'):
- if f'{mod}.register(app)' not in s:adds.append(f'import {mod}\n{mod}.register(app)\n')
-if adds:
- marker='if __name__ == "__main__":';add=''.join(adds)
- if marker in s:s=s.replace(marker,add+marker,1)
- else:s+='\n'+add
-p.write_text(s)
-PY
-NEW_DB=0;[ -f "$BASE/panel.db" ]||NEW_DB=1
+
+# app.py is already the native AWG Panel 8.1 implementation.
+# No runtime version patching is performed here.
+
 python3 - "$BASE/panel.db" <<'PY'
 import sqlite3,sys
 c=sqlite3.connect(sys.argv[1]);c.execute('CREATE TABLE IF NOT EXISTS settings(k TEXT PRIMARY KEY,v TEXT NOT NULL)');c.execute('CREATE TABLE IF NOT EXISTS clients(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT UNIQUE NOT NULL,address TEXT NOT NULL,private_key TEXT NOT NULL,public_key TEXT NOT NULL,psk TEXT NOT NULL,created INTEGER NOT NULL)');c.execute("INSERT OR IGNORE INTO settings(k,v) VALUES('login','admin')");c.execute("INSERT OR IGNORE INTO settings(k,v) VALUES('endpoint','')");c.commit();c.close()
 PY
+NEW_DB=0;[ -f "$BASE/.initial_password" ]||NEW_DB=1
 if [ "$NEW_DB" = 1 ];then ADMIN_PASS=$(openssl rand -hex 12);python3 - "$BASE/panel.db" "$ADMIN_PASS" <<'PY'
 import sqlite3,sys
 c=sqlite3.connect(sys.argv[1]);c.execute("INSERT OR REPLACE INTO settings(k,v) VALUES('password',?)",(sys.argv[2],));c.commit();c.close();open('/opt/awg31-panel/.initial_password','w').write(sys.argv[2]+'\n')
