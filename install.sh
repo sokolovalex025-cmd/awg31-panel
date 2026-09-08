@@ -10,8 +10,42 @@ mkdir -p "$BASE/backups" /etc/amnezia/amneziawg/clients /etc/awg31-panel
 [ -f "$BASE/panel.db" ] && cp -a "$BASE/panel.db" "$BASE/backups/panel-before-8.1-$TS.db"
 [ -f /etc/amnezia/amneziawg/awg0.conf ] && cp -a /etc/amnezia/amneziawg/awg0.conf "$BASE/backups/awg0-before-8.1-$TS.conf"
 apt-get update
-apt-get install -y python3 python3-venv python3-pip curl iproute2 qrencode openssl iptables
-command -v awg >/dev/null 2>&1 || { echo 'AmneziaWG 3.1 не найден. Установите AWG и повторите.'; exit 1; }
+apt-get install -y python3 python3-venv python3-pip curl iproute2 qrencode openssl iptables software-properties-common python3-launchpadlib gnupg2 "linux-headers-$(uname -r)"
+
+# Install the official AmneziaWG package automatically when AWG is missing.
+# Ubuntu 24.04 is supported by the official Amnezia PPA. Current PPA builds
+# provide the AmneziaWG 3.1 userspace tools and kernel module on supported kernels.
+if ! command -v awg >/dev/null 2>&1 || ! command -v awg-quick >/dev/null 2>&1; then
+  add-apt-repository -y ppa:amnezia/ppa
+  apt-get update
+  apt-get install -y amneziawg
+fi
+
+# If AWG exists but is incomplete, repair it from the official PPA.
+if ! command -v awg >/dev/null 2>&1 || ! command -v awg-quick >/dev/null 2>&1; then
+  add-apt-repository -y ppa:amnezia/ppa
+  apt-get update
+  apt-get install -y --reinstall amneziawg
+fi
+
+# Load the kernel module when possible and verify the actual AWG userspace.
+modprobe amneziawg >/dev/null 2>&1 || true
+AWG_VERSION=$(awg --version 2>/dev/null || true)
+KERNEL_VERSION=$(cat /sys/module/amneziawg/version 2>/dev/null || true)
+if ! command -v awg >/dev/null 2>&1 || ! command -v awg-quick >/dev/null 2>&1; then
+  echo 'ОШИБКА: AmneziaWG не установился (awg/awg-quick не найдены).'
+  echo 'Проверьте: apt-cache policy amneziawg'
+  exit 1
+fi
+if [[ "$AWG_VERSION" != *"3.1"* ]] && [[ "$KERNEL_VERSION" != 3.1* ]]; then
+  echo 'ОШИБКА: установлен AWG, но версия 3.1 не обнаружена.'
+  echo "awg: ${AWG_VERSION:-неизвестно}"
+  echo "kernel: ${KERNEL_VERSION:-не загружен}"
+  echo 'Проверьте: awg --version; cat /sys/module/amneziawg/version'
+  exit 1
+fi
+echo "AmneziaWG найден: ${AWG_VERSION:-userspace неизвестен}; kernel=${KERNEL_VERSION:-не загружен}"
+
 cp "$SRC/app.py" "$BASE/app.py"; chmod 600 "$BASE/app.py"
 [ -f "$SRC/background.svg" ] && cp "$SRC/background.svg" "$BASE/background.svg"
 for mod in naiveproxy_panel.py telegram_bot.py system_panel.py advanced_panel.py; do [ -f "$SRC/$mod" ] && cp "$SRC/$mod" "$BASE/$mod" && chmod 600 "$BASE/$mod"; done
