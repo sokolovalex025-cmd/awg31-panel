@@ -55,7 +55,6 @@ for line in lines:
             seen.add(k)
             continue
     out.append(line)
-# Add missing mobile parameters immediately before the first peer.
 insert=[]
 for k,v in updates.items():
     if k not in seen: insert.append(f'{k} = {v}')
@@ -67,7 +66,6 @@ p.write_text('\n'.join(out).rstrip()+'\n')
 PY
 chmod 600 "$CONF"
 
-# Validate before touching the running interface.
 if ! awg-quick strip awg0 >/dev/null 2>&1; then
   echo 'ОШИБКА: AWG 3.1 не принимает конфигурацию.'
   awg-quick strip awg0 || true
@@ -75,14 +73,12 @@ if ! awg-quick strip awg0 >/dev/null 2>&1; then
   exit 1
 fi
 
-# Enable IPv4 forwarding.
 sysctl -w net.ipv4.ip_forward=1 >/dev/null
 cat >/etc/sysctl.d/99-awg31-panel.conf <<EOF
 net.ipv4.ip_forward=1
 EOF
 sysctl --system >/dev/null 2>&1 || true
 
-# Open UDP 443 and keep NAT for VPN clients.
 WAN_IF=$(ip -4 route show default 2>/dev/null | awk 'NR==1{print $5}')
 if [ -n "${WAN_IF:-}" ]; then
   iptables -C INPUT -p udp --dport 443 -j ACCEPT 2>/dev/null || iptables -A INPUT -p udp --dport 443 -j ACCEPT
@@ -104,7 +100,7 @@ systemctl restart awgpanel 2>/dev/null || true
 echo '=== AWG MOBILE PROFILE READY ==='
 awg --version
 systemctl is-active awg-quick@awg0.service
-a wg show awg0 2>/dev/null || awg show awg0
+awg show awg0
 ip -br link show awg0
 printf 'ListenPort: '; awk -F= '/^[[:space:]]*ListenPort[[:space:]]*=/{gsub(/[[:space:]]/,"",$2);print $2;exit}' "$CONF"
 printf 'MTU: '; awk -F= '/^[[:space:]]*MTU[[:space:]]*=/{gsub(/[[:space:]]/,"",$2);print $2;exit}' "$CONF"
