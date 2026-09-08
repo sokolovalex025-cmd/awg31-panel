@@ -34,7 +34,7 @@ sudo ./install.sh
 ## Telegram Bot
 Создайте бота через официального `@BotFather`, получите Bot Token и узнайте свой Telegram ID. В панели откройте **Telegram Bot**, укажите token и один или несколько разрешённых ID через запятую, затем нажмите **Сохранить и запустить**.
 
-Бот использует Telegram Bot API через HTTPS и long polling (`getUpdates`). Telegram указывает, что long polling и webhook являются взаимоисключающими способами получения обновлений. citeturn0search0
+Бот использует Telegram Bot API через HTTPS и long polling (`getUpdates`). Long polling и webhook являются взаимоисключающими способами получения обновлений.
 
 Команды:
 - `/start` — меню;
@@ -48,8 +48,6 @@ sudo ./install.sh
 - 🛡 AWG;
 - 🚀 NaïveProxy;
 - 🔄 Перезапустить AWG.
-
-Для создания бота Telegram рекомендует использовать `@BotFather`; токен необходимо хранить в секрете. citeturn0search3
 
 ## NaïveProxy
 После установки панели откройте **NaïveProxy** в левом меню. Укажите домен, email для ACME/TLS, логин, пароль и TCP-порт, обычно `443`.
