@@ -59,5 +59,4 @@ sudo ./install.sh
 
 - `install.sh` — полный установщик AWG 3.1 + панели
 - `app.py` — Flask web panel
-- `background.jpg` — чистый фон панели
-- `background.svg` — предыдущий векторный фон
+- `background.svg` — чистый фон панели без элементов интерфейса
