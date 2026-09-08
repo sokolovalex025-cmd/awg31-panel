@@ -8,9 +8,21 @@ BASE=/opt/awg31-panel
 mkdir -p "$BASE" "$BASE/backups" /etc/amnezia/amneziawg/clients
 [ -f "$BASE/app.py" ] && cp -a "$BASE/app.py" "$BASE/backups/app-before-6.7.2-$(date +%Y%m%d-%H%M%S).py"
 [ -f /etc/amnezia/amneziawg/awg0.conf ] && cp -a /etc/amnezia/amneziawg/awg0.conf "$BASE/backups/awg0-before-6.7.2-$(date +%Y%m%d-%H%M%S).conf"
-cp app.py "$BASE/app.py"
-cp background.svg "$BASE/background.svg"
+cp app.py "$BASE/app.py"; cp background.svg "$BASE/background.svg"
 chmod 750 "$BASE"; chmod 644 "$BASE/background.svg"; chmod 600 "$BASE/app.py"
+# Add a direct background endpoint so the image is served once, without a duplicated overlay.
+python3 - <<'PY'
+p='/opt/awg31-panel/app.py'
+s=open(p).read()
+marker="LAY=CSS+'''")
+PY
+if ! grep -q "@app.route('/background.jpg')" "$BASE/app.py"; then
+python3 - <<'PY'
+p='/opt/awg31-panel/app.py'; s=open(p).read(); marker="LAY=CSS+'''"; ins="@app.route('/background.jpg')\ndef background():\n    return send_file(BASE/'background.svg', mimetype='image/svg+xml')\n"
+assert marker in s
+open(p,'w').write(s.replace(marker,ins+marker,1))
+PY
+fi
 if [ ! -x "$BASE/venv/bin/python" ]; then apt-get update; apt-get install -y python3 python3-venv python3-pip curl iproute2 qrencode openssl; python3 -m venv "$BASE/venv"; "$BASE/venv/bin/pip" install -q Flask; fi
 "$BASE/venv/bin/python" -m py_compile "$BASE/app.py"
 SECRET=$(systemctl show awgpanel -p Environment --value 2>/dev/null | sed -n 's/.*AWG_PANEL_SECRET=\([^ ]*\).*/\1/p' || true); [ -n "$SECRET" ] || SECRET=$(openssl rand -hex 32)
