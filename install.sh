@@ -86,7 +86,9 @@ NoNewPrivileges=false
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl daemon-reload; systemctl enable --now awgpanel; systemctl disable --now awgpanel-telegram.service >/dev/null 2>&1 || true
+BOT_CONFIGURED=0; [ -s /etc/awg31-panel/telegram.env ] && BOT_CONFIGURED=1
+systemctl daemon-reload; systemctl enable --now awgpanel
+if [ "$BOT_CONFIGURED" = 1 ]; then systemctl enable --now awgpanel-telegram.service; else systemctl disable --now awgpanel-telegram.service >/dev/null 2>&1 || true; fi
 sleep 2
 systemctl is-active --quiet awgpanel || { journalctl -u awgpanel -n 80 --no-pager; exit 1; }
 IP=$(curl -4 -fsS --max-time 5 https://api.ipify.org || true)
