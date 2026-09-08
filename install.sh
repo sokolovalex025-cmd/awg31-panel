@@ -13,8 +13,6 @@ apt-get update
 apt-get install -y python3 python3-venv python3-pip curl iproute2 qrencode openssl iptables software-properties-common python3-launchpadlib gnupg2 "linux-headers-$(uname -r)"
 
 # Install the official AmneziaWG package automatically when AWG is missing.
-# Ubuntu 24.04 is supported by the official Amnezia PPA. Current PPA builds
-# provide the AmneziaWG 3.1 userspace tools and kernel module on supported kernels.
 if ! command -v awg >/dev/null 2>&1 || ! command -v awg-quick >/dev/null 2>&1; then
   add-apt-repository -y ppa:amnezia/ppa
   apt-get update
@@ -28,20 +26,17 @@ if ! command -v awg >/dev/null 2>&1 || ! command -v awg-quick >/dev/null 2>&1; t
   apt-get install -y --reinstall amneziawg
 fi
 
-# Load the kernel module when possible and verify the actual AWG userspace.
 modprobe amneziawg >/dev/null 2>&1 || true
 AWG_VERSION=$(awg --version 2>/dev/null || true)
 KERNEL_VERSION=$(cat /sys/module/amneziawg/version 2>/dev/null || true)
 if ! command -v awg >/dev/null 2>&1 || ! command -v awg-quick >/dev/null 2>&1; then
   echo 'ОШИБКА: AmneziaWG не установился (awg/awg-quick не найдены).'
-  echo 'Проверьте: apt-cache policy amneziawg'
   exit 1
 fi
 if [[ "$AWG_VERSION" != *"3.1"* ]] && [[ "$KERNEL_VERSION" != 3.1* ]]; then
   echo 'ОШИБКА: установлен AWG, но версия 3.1 не обнаружена.'
   echo "awg: ${AWG_VERSION:-неизвестно}"
   echo "kernel: ${KERNEL_VERSION:-не загружен}"
-  echo 'Проверьте: awg --version; cat /sys/module/amneziawg/version'
   exit 1
 fi
 echo "AmneziaWG найден: ${AWG_VERSION:-userspace неизвестен}; kernel=${KERNEL_VERSION:-не загружен}"
@@ -52,6 +47,38 @@ for mod in naiveproxy_panel.py telegram_bot.py system_panel.py advanced_panel.py
 
 # app.py is already the native AWG Panel 8.1 implementation.
 # No runtime version patching is performed here.
+
+# Create a usable awg0 configuration on a fresh server.
+# Existing AWG configuration is preserved and only repaired when awg0.conf is missing.
+AWG_CONF=/etc/amnezia/amneziawg/awg0.conf
+if [ ! -f "$AWG_CONF" ]; then
+  SERVER_PRIVATE_KEY=$(awg genkey)
+  SERVER_PUBLIC_KEY=$(printf '%s' "$SERVER_PRIVATE_KEY" | awg pubkey)
+  cat >"$AWG_CONF" <<EOF
+[Interface]
+Address = 10.66.66.1/24
+ListenPort = 51820
+PrivateKey = $SERVER_PRIVATE_KEY
+MTU = 1420
+EOF
+  chmod 600 "$AWG_CONF"
+  printf '%s\n' "$SERVER_PUBLIC_KEY" > /etc/awg31-panel/server_public.key
+  chmod 600 /etc/awg31-panel/server_public.key
+fi
+chmod 600 "$AWG_CONF"
+
+# Enable IPv4 forwarding for client internet access.
+sysctl -w net.ipv4.ip_forward=1 >/dev/null
+cat >/etc/sysctl.d/99-awg31-panel.conf <<EOF
+net.ipv4.ip_forward=1
+EOF
+
+# NAT through the VPS default route. Do not duplicate the rule on reinstall.
+WAN_IF=$(ip -4 route show default 2>/dev/null | awk 'NR==1{print $5}')
+if [ -n "$WAN_IF" ]; then
+  iptables -t nat -C POSTROUTING -s 10.66.66.0/24 -o "$WAN_IF" -j MASQUERADE 2>/dev/null || \
+  iptables -t nat -A POSTROUTING -s 10.66.66.0/24 -o "$WAN_IF" -j MASQUERADE
+fi
 
 python3 - "$BASE/panel.db" <<'PY'
 import sqlite3,sys
@@ -100,9 +127,17 @@ NoNewPrivileges=false
 [Install]
 WantedBy=multi-user.target
 EOF
+
+# Start AWG itself before starting the panel, so the dashboard reports online.
+systemctl daemon-reload
+systemctl enable --now awg-quick@awg0
+sleep 2
+systemctl is-active --quiet awg-quick@awg0 || { echo 'ОШИБКА: awg0 не запустился'; systemctl status awg-quick@awg0 --no-pager -l; exit 1; }
+
 BOT_CONFIGURED=0;[ -s /etc/awg31-panel/telegram.env ]&&BOT_CONFIGURED=1
-systemctl daemon-reload;systemctl enable --now awgpanel
+systemctl enable --now awgpanel
 if [ "$BOT_CONFIGURED" = 1 ];then systemctl enable --now awgpanel-telegram.service;else systemctl disable --now awgpanel-telegram.service >/dev/null 2>&1||true;fi
 sleep 2;systemctl is-active --quiet awgpanel||{ journalctl -u awgpanel -n 80 --no-pager;exit 1; }
 IP=$(curl -4 -fsS --max-time 5 https://api.ipify.org||true)
 echo "AWG Panel 8.1: http://${IP}:8080/login";echo "Login: admin";if [ -f "$BASE/.initial_password" ];then echo "Password: $(cat "$BASE/.initial_password")";else echo 'Password: existing password preserved';fi
+echo "AWG interface: $(ip -br link show awg0 2>/dev/null || true)"
