@@ -18,6 +18,7 @@ cp "$SRC/app.py" "$BASE/app.py"; chmod 600 "$BASE/app.py"
 python3 - "$BASE/app.py" <<'PY'
 from pathlib import Path
 p=Path(__import__('sys').argv[1]); s=p.read_text()
+s=s.replace('AWG Panel 7.1','AWG Panel 7.2').replace('v=71','v=72')
 if 'naiveproxy_panel.register(app)' not in s:
     marker='if __name__ == "__main__":'
     add='import naiveproxy_panel\nnaiveproxy_panel.register(app)\n'
