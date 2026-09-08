@@ -6,24 +6,21 @@ export DEBIAN_FRONTEND=noninteractive
 [ "${ID:-}" = ubuntu ] || { echo 'Требуется Ubuntu'; exit 1; }
 BASE=/opt/awg31-panel; SRC="$(cd "$(dirname "$0")" && pwd)"; TS=$(date +%Y%m%d-%H%M%S)
 mkdir -p "$BASE/backups" /etc/amnezia/amneziawg/clients /etc/awg31-panel
-[ -f "$BASE/app.py" ] && cp -a "$BASE/app.py" "$BASE/backups/app-before-8.0-$TS.py"
-[ -f "$BASE/panel.db" ] && cp -a "$BASE/panel.db" "$BASE/backups/panel-before-8.0-$TS.db"
-[ -f /etc/amnezia/amneziawg/awg0.conf ] && cp -a /etc/amnezia/amneziawg/awg0.conf "$BASE/backups/awg0-before-8.0-$TS.conf"
+[ -f "$BASE/app.py" ] && cp -a "$BASE/app.py" "$BASE/backups/app-before-8.1-$TS.py"
+[ -f "$BASE/panel.db" ] && cp -a "$BASE/panel.db" "$BASE/backups/panel-before-8.1-$TS.db"
+[ -f /etc/amnezia/amneziawg/awg0.conf ] && cp -a /etc/amnezia/amneziawg/awg0.conf "$BASE/backups/awg0-before-8.1-$TS.conf"
 apt-get update
 apt-get install -y python3 python3-venv python3-pip curl iproute2 qrencode openssl iptables
 command -v awg >/dev/null 2>&1 || { echo 'AmneziaWG 3.1 не найден. Установите AWG и повторите.'; exit 1; }
 cp "$SRC/app.py" "$BASE/app.py"; chmod 600 "$BASE/app.py"
 [ -f "$SRC/background.svg" ] && cp "$SRC/background.svg" "$BASE/background.svg"
-[ -f "$SRC/naiveproxy_panel.py" ] && cp "$SRC/naiveproxy_panel.py" "$BASE/naiveproxy_panel.py"; chmod 600 "$BASE/naiveproxy_panel.py"
-[ -f "$SRC/telegram_bot.py" ] && cp "$SRC/telegram_bot.py" "$BASE/telegram_bot.py"; chmod 600 "$BASE/telegram_bot.py"
-[ -f "$SRC/system_panel.py" ] && cp "$SRC/system_panel.py" "$BASE/system_panel.py"; chmod 600 "$BASE/system_panel.py"
-[ -f "$SRC/advanced_panel.py" ] && cp "$SRC/advanced_panel.py" "$BASE/advanced_panel.py"; chmod 600 "$BASE/advanced_panel.py"
+for mod in naiveproxy_panel.py telegram_bot.py system_panel.py advanced_panel.py sweden_flag.py; do [ -f "$SRC/$mod" ] && cp "$SRC/$mod" "$BASE/$mod" && chmod 600 "$BASE/$mod"; done
 python3 - "$BASE/app.py" <<'PY'
 from pathlib import Path
 p=Path(__import__('sys').argv[1]);s=p.read_text()
-for a,b in [('AWG Panel 7.1','AWG Panel 8.0'),('AWG Panel 7.2','AWG Panel 8.0'),('AWG Panel 7.3','AWG Panel 8.0'),('AWG Panel 7.4','AWG Panel 8.0'),('v=71','v=80'),('v=72','v=80'),('v=73','v=80'),('v=74','v=80')]:s=s.replace(a,b)
+for a,b in [('AWG Panel 7.1','AWG Panel 8.1'),('AWG Panel 7.2','AWG Panel 8.1'),('AWG Panel 7.3','AWG Panel 8.1'),('AWG Panel 7.4','AWG Panel 8.1'),('AWG Panel 8.0','AWG Panel 8.1'),('v=71','v=81'),('v=72','v=81'),('v=73','v=81'),('v=74','v=81'),('v=80','v=81')]:s=s.replace(a,b)
 adds=[]
-for mod in ('naiveproxy_panel','telegram_bot','system_panel','advanced_panel'):
+for mod in ('naiveproxy_panel','telegram_bot','system_panel','advanced_panel','sweden_flag'):
  if f'{mod}.register(app)' not in s:adds.append(f'import {mod}\n{mod}.register(app)\n')
 if adds:
  marker='if __name__ == "__main__":';add=''.join(adds)
@@ -47,11 +44,11 @@ PY
 );fi
 python3 -m venv "$BASE/venv"
 "$BASE/venv/bin/pip" install -q 'Flask>=3,<4' 'qrcode[pil]>=7,<9'
-"$BASE/venv/bin/python" -m py_compile "$BASE/app.py" "$BASE/naiveproxy_panel.py" "$BASE/telegram_bot.py" "$BASE/system_panel.py" "$BASE/advanced_panel.py"
+"$BASE/venv/bin/python" -m py_compile "$BASE/app.py" "$BASE/naiveproxy_panel.py" "$BASE/telegram_bot.py" "$BASE/system_panel.py" "$BASE/advanced_panel.py" "$BASE/sweden_flag.py"
 SECRET=$(openssl rand -hex 32)
 cat >/etc/systemd/system/awgpanel.service <<EOF
 [Unit]
-Description=AWG Panel 8.0 Mobile Strong + NaiveProxy + Telegram + Monitoring
+Description=AWG Panel 8.1 Mobile Strong + NaiveProxy + Telegram + Monitoring
 After=network-online.target awg-quick@awg0.service
 Wants=network-online.target
 [Service]
@@ -84,8 +81,5 @@ systemctl daemon-reload;systemctl enable --now awgpanel
 if [ "$BOT_CONFIGURED" = 1 ];then systemctl enable --now awgpanel-telegram.service;else systemctl disable --now awgpanel-telegram.service >/dev/null 2>&1||true;fi
 sleep 2;systemctl is-active --quiet awgpanel||{ journalctl -u awgpanel -n 80 --no-pager;exit 1; }
 IP=$(curl -4 -fsS --max-time 5 https://api.ipify.org||true)
-echo "AWG Panel 8.0: http://${IP}:8080/login";echo "Login: admin";if [ -f "$BASE/.initial_password" ];then echo "Password: $(cat "$BASE/.initial_password")";else echo 'Password: existing password preserved';fi
-echo 'Dashboard Pro: /dashboard-plus — VPS, AWG и трафик клиентов.'
-echo 'Monitoring: /system — CPU, RAM, disk, network, services.'
-echo 'Health Check: /diagnostics.'
-echo 'Backup: /backup/download — конфигурация, база и Telegram env.'
+echo "AWG Panel 8.1: http://${IP}:8080/login";echo "Login: admin";if [ -f "$BASE/.initial_password" ];then echo "Password: $(cat "$BASE/.initial_password")";else echo 'Password: existing password preserved';fi
+echo 'Sweden flag: 🇸🇪 добавляется в каждый клиентский AWG .conf и QR.'
