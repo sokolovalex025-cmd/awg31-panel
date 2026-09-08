@@ -10,15 +10,11 @@ mkdir -p "$BASE" "$BASE/backups" /etc/amnezia/amneziawg/clients
 [ -f /etc/amnezia/amneziawg/awg0.conf ] && cp -a /etc/amnezia/amneziawg/awg0.conf "$BASE/backups/awg0-before-6.7.2-$(date +%Y%m%d-%H%M%S).conf"
 cp app.py "$BASE/app.py"; cp background.svg "$BASE/background.svg"
 chmod 750 "$BASE"; chmod 644 "$BASE/background.svg"; chmod 600 "$BASE/app.py"
-# Add a direct background endpoint so the image is served once, without a duplicated overlay.
-python3 - <<'PY'
-p='/opt/awg31-panel/app.py'
-s=open(p).read()
-marker="LAY=CSS+'''")
-PY
 if ! grep -q "@app.route('/background.jpg')" "$BASE/app.py"; then
 python3 - <<'PY'
-p='/opt/awg31-panel/app.py'; s=open(p).read(); marker="LAY=CSS+'''"; ins="@app.route('/background.jpg')\ndef background():\n    return send_file(BASE/'background.svg', mimetype='image/svg+xml')\n"
+p='/opt/awg31-panel/app.py'
+s=open(p).read(); marker="LAY=CSS+'''"
+ins="@app.route('/background.jpg')\ndef background():\n    return send_file(BASE/'background.svg', mimetype='image/svg+xml')\n"
 assert marker in s
 open(p,'w').write(s.replace(marker,ins+marker,1))
 PY
