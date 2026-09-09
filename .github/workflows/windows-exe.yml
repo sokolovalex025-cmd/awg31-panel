@@ -1,0 +1,30 @@
+name: Build Windows EXE
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'windows/**'
+      - '.github/workflows/windows-exe.yml'
+  workflow_dispatch:
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Publish single-file EXE
+        run: dotnet publish windows/AWGPanel.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+      - name: Create ZIP
+        shell: pwsh
+        run: Compress-Archive -Path publish/* -DestinationPath AWG-Panel-Windows-x64.zip -Force
+      - name: Upload Windows application
+        uses: actions/upload-artifact@v4
+        with:
+          name: AWG-Panel-Windows-x64
+          path: |
+            publish/AWG Panel.exe
+            AWG-Panel-Windows-x64.zip
