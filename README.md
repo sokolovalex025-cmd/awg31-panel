@@ -8,11 +8,11 @@ Web-панель для AmneziaWG 3.1 на Ubuntu 24.04 с NaïveProxy, Telegram
 - существующий `panel.db` и пароль сохраняются при обновлении;
 - резервные копии перед обновлением;
 - клиенты AWG: `.conf`, QR и `vpn://`;
-- Strong Mobile профиль AWG 3.1;
+- единый Strong Mobile профиль AWG 3.1 для сервера и клиентских конфигураций;
 - Dashboard Pro с трафиком клиентов;
 - системный мониторинг и диагностика;
 - резервное копирование конфигурации и базы данных;
-- диагностика сервиса, интерфейса, forwarding и firewall tools;
+- диагностика сервиса, интерфейса, forwarding и firewall;
 - мобильная адаптация;
 - чистый футуристичный фон без задвоения;
 - **NaïveProxy через Caddy/forward_proxy**: установка, запуск, остановка, перезапуск и удаление сервиса;
@@ -23,7 +23,7 @@ Web-панель для AmneziaWG 3.1 на Ubuntu 24.04 с NaïveProxy, Telegram
 - Telegram-доступ ограничивается списком разрешённых Telegram ID;
 - токен бота хранится отдельно в `/etc/awg31-panel/telegram.env` с правами `600`.
 
-## Установка
+## Установка / обновление
 ```bash
 git clone https://github.com/sokolovalex025-cmd/awg31-panel.git
 cd awg31-panel
@@ -33,7 +33,36 @@ sudo ./install.sh
 
 Панель: `http://SERVER_IP:8080/login`
 
-При новой установке установщик выводит случайный пароль администратора и сохраняет его в `/opt/awg31-panel/.initial_password`. При обновлении существующий пароль не меняется.
+Установщик перед изменениями делает резервные копии `app.py`, базы и AWG-конфигурации. При новой установке создаётся случайный пароль администратора; при обновлении существующий пароль сохраняется.
+
+## Canonical Strong Mobile
+Установщик и `repair-awg-mobile.sh` приводят сервер к одному профилю:
+- UDP `443`
+- MTU `1280`
+- Jc/Jmin/Jmax `4/40/120`
+- S1-S4 `16/24/16/32`
+- H1-H4 `1/2/3/4`
+- RandomTrailers `on`
+- DisableCookies `on`
+- существующий `HeaderProtectionKey` сохраняется;
+- клиентские конфигурации панели получают те же S1-S4 и AWG 3.1 параметры из серверного профиля.
+
+`awg-quick strip awg0` выполняется до запуска systemd, поэтому синтаксическая ошибка конфигурации не должна приводить к запуску сломанного интерфейса.
+
+## Диагностика
+```bash
+cd /root/awg31-panel
+git pull --ff-only origin main
+chmod +x diagnostics.sh repair-awg-mobile.sh
+a./diagnostics.sh
+```
+
+Если на существующем VPS нужно только привести AWG к мобильному профилю:
+```bash
+./repair-awg-mobile.sh
+```
+
+Диагностика проверяет версию tools/kernel module, systemd, `awg0`, UAPI, HTTP панели, forwarding, конфигурацию AWG, UDP 443, NAT и Python-модули.
 
 ## Telegram Bot
 Создайте бота через официального `@BotFather`, получите Bot Token и узнайте свой Telegram ID. В панели откройте **Telegram Bot**, укажите token и один или несколько разрешённых ID через запятую, затем нажмите **Сохранить и запустить**.
@@ -46,17 +75,10 @@ sudo ./install.sh
 - `/status` — статус AWG, NaïveProxy и peers;
 - `/restart` — перезапуск AWG.
 
-Кнопки:
-- 📊 Статус;
-- 👥 Клиенты/peers;
-- 🛡 AWG;
-- 🚀 NaïveProxy;
-- 🔄 Перезапустить AWG.
-
 ## NaïveProxy
 После установки панели откройте **NaïveProxy** в левом меню. Укажите домен, email для ACME/TLS, логин, пароль и TCP-порт, обычно `443`.
 
-Панель собирает Caddy с NaïveProxy `forward_proxy`, создаёт systemd-сервис и конфигурацию. AWG UDP и NaïveProxy TCP могут работать параллельно.
+AWG использует UDP 443, поэтому NaïveProxy должен использовать отдельный TCP-порт или отдельный IP, если оба сервиса должны работать на одном VPS.
 
 Клиентский формат:
 ```json
@@ -65,14 +87,3 @@ sudo ./install.sh
   "proxy": "https://USER:PASSWORD@DOMAIN:443"
 }
 ```
-
-## Strong Mobile
-- UDP `1234`
-- MTU `1380`
-- Jc/Jmin/Jmax `4/40/120`
-- S1-S4 `16/24/16/32`
-- H1-H4 `1/2/3/4`
-- ContentPaddingAddition `0-64`
-- RandomTrailers `on`
-- DisableCookies `on`
-- Rekey/handshake timing оптимизированы для мобильных сетей.
