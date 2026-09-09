@@ -1,0 +1,28 @@
+// !$*UTF8*$!
+{
+ archiveVersion = 1;
+ classes = { };
+ objectVersion = 77;
+ objects = {
+  111111111111111111111111 = {isa = PBXProject; attributes = {LastUpgradeCheck = 2600;}; buildConfigurationList = 222222222222222222222222; compatibilityVersion = "Xcode 3.2"; developmentRegion = en; knownRegions = (en, Base); mainGroup = 333333333333333333333333; productRefGroup = 444444444444444444444444; projectDirPath = ""; projectRoot = ""; targets = (555555555555555555555555); };
+ 333333333333333333333333 = {isa = PBXGroup; children = (666666666666666666666666,777777777777777777777777); sourceTree = "<group>"; };
+ 666666666666666666666666 = {isa = PBXGroup; children = (888888888888888888888888,999999999999999999999999,AAAAAAAAAAAAAAAAAAAAAAAA); path = AWGPanel; sourceTree = "<group>"; };
+ 777777777777777777777777 = {isa = PBXGroup; children = (BBBBBBBBBBBBBBBBBBBBBBBB); name = Products; sourceTree = "<group>"; };
+ 888888888888888888888888 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AWGPanelApp.swift; sourceTree = "<group>"; };
+ 999999999999999999999999 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+ AAAAAAAAAAAAAAAAAAAAAAAA = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+ BBBBBBBBBBBBBBBBBBBBBBBB = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "AWG Panel.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+ CCCCCCCCCCCCCCCCCCCCCCCC = {isa = PBXBuildFile; fileRef = 888888888888888888888888; };
+ DDDDDDDDDDDDDDDDDDDDDDDD = {isa = PBXBuildFile; fileRef = 999999999999999999999999; };
+ EEEEEEEEEEEEEEEEEEEEEEEE = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (CCCCCCCCCCCCCCCCCCCCCCCC,DDDDDDDDDDDDDDDDDDDDDDDD); runOnlyForDeploymentPostprocessing = 0; };
+ 555555555555555555555555 = {isa = PBXNativeTarget; buildConfigurationList = 222222222222222222222223; buildPhases = (EEEEEEEEEEEEEEEEEEEEEEEE); buildRules = (); dependencies = (); name = "AWG Panel"; productName = "AWG Panel"; productReference = BBBBBBBBBBBBBBBBBBBBBBBB; productType = "com.apple.product-type.application"; };
+ 444444444444444444444444 = {isa = PBXGroup; children = (BBBBBBBBBBBBBBBBBBBBBBBB); name = Products; sourceTree = "<group>"; };
+ 222222222222222222222222 = {isa = XCConfigurationList; buildConfigurations = (121212121212121212121212,131313131313131313131313); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+ 222222222222222222222223 = {isa = XCConfigurationList; buildConfigurations = (141414141414141414141414,151515151515151515151515); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+ 121212121212121212121212 = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; }; name = Debug; };
+ 131313131313131313131313 = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; }; name = Release; };
+ 141414141414141414141414 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = AWGPanel/Info.plist; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = com.awgpanel.mobile.ios; PRODUCT_NAME = "AWG Panel"; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_EMIT_LOC_STRINGS = YES; }; name = Debug; };
+ 151515151515151515151515 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = AWGPanel/Info.plist; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = com.awgpanel.mobile.ios; PRODUCT_NAME = "AWG Panel"; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_EMIT_LOC_STRINGS = YES; }; name = Release; };
+ };
+ rootObject = 111111111111111111111111;
+}
