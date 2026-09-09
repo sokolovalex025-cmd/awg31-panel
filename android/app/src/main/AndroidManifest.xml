@@ -3,6 +3,8 @@
     <application
         android:theme="@style/AppTheme"
         android:label="AWG Panel"
+        android:icon="@drawable/ic_awg_panel"
+        android:roundIcon="@drawable/ic_awg_panel"
         android:allowBackup="true"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true">
