@@ -10,7 +10,7 @@ cp -a "$APP" "$BASE/backups/app-before-profile-repair-$(date +%Y%m%d-%H%M%S).py"
 
 compile_ok() { /opt/awg31-panel/venv/bin/python -m py_compile "$APP" >/tmp/awgpanel-pycompile.out 2>&1; }
 
-# If a previous profile upgrade left a broken app.py, restore the last known-good
+# If a previous profile upgrade left a broken app.py, restore the latest known-good
 # pre-profile version and let the corrected upgrade script install profiles again.
 if ! compile_ok; then
   echo 'Current app.py has a Python syntax error. Restoring the latest pre-profile backup...'
@@ -25,7 +25,7 @@ if ! compile_ok; then
 fi
 
 chmod +x "$SCRIPT_DIR/upgrade-profiles.sh"
-"$SCRIPT_DIR/upgrade-profiles.sh" || true
+"$SCRIPT_DIR/upgrade-profiles.sh"
 
 python3 - "$APP" <<'PY'
 from pathlib import Path
