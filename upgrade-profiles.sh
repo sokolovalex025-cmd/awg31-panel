@@ -10,8 +10,14 @@ python3 - "$APP" <<'PY'
 from pathlib import Path
 import sys
 p=Path(sys.argv[1]); s=p.read_text()
+# Repair an earlier broken installation if the profile manager is already present.
 if 'AWG PROFILE MANAGER V1' in s:
-    print('Profiles already installed.')
+    fixed=s.replace("{{cur.get('H3','-'))}}", "{{cur.get('H3','-')}}")
+    if fixed != s:
+        p.write_text(fixed)
+        print('Profiles already installed; fixed H3 template syntax.')
+    else:
+        print('Profiles already installed; no changes needed.')
     raise SystemExit(0)
 s=s.replace("VERSION='8.1';BG_VERSION='82'", "VERSION='8.2';BG_VERSION='82'")
 s=s.replace("('♣','Клиенты','/clients'),('▤','Конфигурация','/config')", "('♣','Клиенты','/clients'),('◈','Профили подключения','/profiles'),('▤','Конфигурация','/config')")
