@@ -26,8 +26,8 @@ if [ "$(sysctl -n net.ipv4.ip_forward 2>/dev/null || echo 0)" = 1 ]; then pass '
 if [ -s "$CONF" ]; then
   pass 'AWG config exists'
   if [ "$(stat -c '%a' "$CONF" 2>/dev/null)" = 600 ]; then pass 'Config permissions 600'; else warn 'Config permissions are not 600'; fi
-  if awg-quick strip awg0 >/dev/null 2>&1; then pass 'awg-quick config validation'; else fail 'awg-quick config validation'; fi
-  python3 - "$CONF" <<'PY'
+  run 'awg-quick config validation' awg-quick strip awg0
+  if python3 - "$CONF" <<'PY'
 import sys
 from pathlib import Path
 p=Path(sys.argv[1]); d={}
@@ -37,22 +37,23 @@ for line in p.read_text(errors='replace').splitlines():
         k,v=s.split('=',1); d[k.strip()]=v.strip()
 required={'ListenPort':'443','MTU':'1280','Jc':'4','Jmin':'40','Jmax':'120','S1':'16','S2':'24','S3':'16','S4':'32','H1':'1','H2':'2','H3':'3','H4':'4','RandomTrailers':'on','DisableCookies':'on'}
 errors=[f'{k}={d.get(k)!r}, expected {v!r}' for k,v in required.items() if d.get(k)!=v]
-if d.get('HeaderProtectionKey') and all(int(d.get(k,'0'))>=12 for k in ('S1','S2','S3','S4')):
-    print('[OK] HeaderProtectionKey + S1-S4 compatibility');
-else:
-    print('[WARN] HeaderProtectionKey/S1-S4 compatibility not confirmed')
 if errors:
-    print('[ERROR] profile mismatch: '+'; '.join(errors)); sys.exit(1)
+    print('[ERROR] canonical profile mismatch: '+'; '.join(errors)); sys.exit(1)
+if d.get('HeaderProtectionKey'):
+    if all(int(d.get(k,'0'))>=12 for k in ('S1','S2','S3','S4')): print('[OK] HeaderProtectionKey + S1-S4 compatible')
+    else: print('[ERROR] HeaderProtectionKey requires S1-S4 >= 12'); sys.exit(1)
+else:
+    print('[WARN] HeaderProtectionKey not configured')
 print('[OK] canonical mobile profile')
 PY
-  rc=$?; if [ $rc -eq 0 ]; then ok=$((ok+2)); total=$((total+2)); else total=$((total+2)); fi
+  then pass 'Canonical mobile profile'; else fail 'Canonical mobile profile'; fi
 else
   fail 'AWG config exists'
 fi
 
-if iptables -S >/dev/null 2>&1; then
+if command -v iptables >/dev/null 2>&1; then
   pass 'iptables available'
-  if iptables -C INPUT -p udp --dport 443 -j ACCEPT >/dev/null 2>&1; then pass 'UDP 443 INPUT rule'; else warn 'UDP 443 INPUT rule not found (external firewall may still allow it)'; fi
+  if iptables -C INPUT -p udp --dport 443 -j ACCEPT >/dev/null 2>&1; then pass 'UDP 443 INPUT rule'; else warn 'UDP 443 INPUT rule not found (cloud firewall may handle it)'; fi
   if iptables -t nat -S POSTROUTING 2>/dev/null | grep -q '10\.66\.66\.0/24.*MASQUERADE'; then pass 'IPv4 NAT masquerade'; else warn 'IPv4 NAT masquerade not found'; fi
 else
   warn 'iptables unavailable; check nftables/cloud firewall separately'
