@@ -11,6 +11,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -22,6 +23,9 @@ import android.widget.TextView;
 
 public class MainActivity extends Activity {
     private WebView webView;
+    private TextView errorTitle;
+    private TextView errorText;
+    private LinearLayout errorView;
     private SharedPreferences prefs;
     private static final String KEY_URL = "panel_url";
     private static final String DEFAULT_URL = "http://95.85.241.45:8080";
@@ -71,11 +75,31 @@ public class MainActivity extends Activity {
         ws.setSupportZoom(false);
         ws.setLoadWithOverviewMode(false);
         ws.setUseWideViewPort(false);
-        ws.setUserAgentString(ws.getUserAgentString() + " AWGPanelAndroid/1.0");
+        ws.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+        ws.setCacheMode(WebSettings.LOAD_DEFAULT);
+        ws.setUserAgentString(ws.getUserAgentString() + " AWGPanelAndroid/1.1");
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
 
         webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+                showWebView();
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                showWebView();
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                if (request.isForMainFrame()) showError("Не удалось открыть панель", "Проверьте интернет и адрес VPS: " + panelUrl());
+                super.onReceivedError(view, request, error);
+            }
+
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String u = request.getUrl().toString();
@@ -92,16 +116,14 @@ public class MainActivity extends Activity {
                 WebSettings s = child.getSettings();
                 s.setJavaScriptEnabled(true);
                 s.setDomStorageEnabled(true);
+                s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
                 child.setWebViewClient(new WebViewClient());
                 child.setWebChromeClient(this);
                 child.setBackgroundColor(Color.rgb(3, 13, 28));
                 popup.setContentView(child);
-                popup.getWindow();
                 popup.setOnDismissListener(d -> child.destroy());
                 popup.show();
-                if (popup.getWindow() != null) {
-                    popup.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-                }
+                if (popup.getWindow() != null) popup.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
                 WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
                 transport.setWebView(child);
                 resultMsg.sendToTarget();
@@ -109,14 +131,41 @@ public class MainActivity extends Activity {
             }
         });
 
+        errorView = new LinearLayout(this);
+        errorView.setOrientation(LinearLayout.VERTICAL);
+        errorView.setGravity(Gravity.CENTER);
+        errorView.setPadding(32, 32, 32, 32);
+        errorView.setBackgroundColor(Color.rgb(3, 13, 28));
+        errorTitle = new TextView(this);
+        errorTitle.setTextColor(Color.WHITE);
+        errorTitle.setTextSize(22);
+        errorTitle.setGravity(Gravity.CENTER);
+        errorText = new TextView(this);
+        errorText.setTextColor(Color.LTGRAY);
+        errorText.setTextSize(15);
+        errorText.setGravity(Gravity.CENTER);
+        errorText.setPadding(0, 16, 0, 24);
+        Button retry = new Button(this);
+        retry.setText("Повторить");
+        retry.setOnClickListener(v -> loadPanel());
+        Button change = new Button(this);
+        change.setText("Изменить адрес");
+        change.setOnClickListener(v -> showSettings());
+        errorView.addView(errorTitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        errorView.addView(errorText, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        errorView.addView(retry, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        errorView.addView(change, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
         back.setOnClickListener(v -> { if (webView.canGoBack()) webView.goBack(); });
         forward.setOnClickListener(v -> { if (webView.canGoForward()) webView.goForward(); });
-        refresh.setOnClickListener(v -> webView.reload());
+        refresh.setOnClickListener(v -> loadPanel());
         settings.setOnClickListener(v -> showSettings());
 
         root.addView(bar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 56));
         root.addView(webView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        root.addView(errorView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         setContentView(root);
+        errorView.setVisibility(View.GONE);
     }
 
     private Button smallButton(String text) {
@@ -135,7 +184,20 @@ public class MainActivity extends Activity {
     }
 
     private void loadPanel() {
+        showWebView();
         webView.loadUrl(panelUrl());
+    }
+
+    private void showWebView() {
+        webView.setVisibility(View.VISIBLE);
+        errorView.setVisibility(View.GONE);
+    }
+
+    private void showError(String title, String message) {
+        errorTitle.setText(title);
+        errorText.setText(message);
+        webView.setVisibility(View.GONE);
+        errorView.setVisibility(View.VISIBLE);
     }
 
     private void showSettings() {
@@ -153,13 +215,13 @@ public class MainActivity extends Activity {
                     String url = input.getText().toString().trim();
                     if (!url.startsWith("http://") && !url.startsWith("https://")) url = "http://" + url;
                     prefs.edit().putString(KEY_URL, url).apply();
-                    webView.loadUrl(url);
+                    loadPanel();
                 }).show();
     }
 
     @Override
     public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) webView.goBack();
+        if (webView != null && webView.getVisibility() == View.VISIBLE && webView.canGoBack()) webView.goBack();
         else super.onBackPressed();
     }
 }
