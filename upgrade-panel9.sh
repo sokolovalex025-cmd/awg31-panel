@@ -11,13 +11,18 @@ TS=$(date +%Y%m%d-%H%M%S)
 [ -f "$BASE/app9.py" ] && cp -a "$BASE/app9.py" "$BASE/backups/app9-before-9-$TS.py"
 cp "$SRC/app.py" "$BASE/app.py"
 cp "$SRC/app9.py" "$BASE/app9.py"
-for mod in naiveproxy_panel.py telegram_bot.py system_panel.py advanced_panel.py mobile_nav.py background.svg; do
+for mod in naiveproxy_panel.py telegram_bot.py system_panel.py advanced_panel.py mobile_nav.py security_hardening.py background.svg; do
   [ -f "$SRC/$mod" ] && cp "$SRC/$mod" "$BASE/$mod"
 done
+# Register the security module in the 9.x optional-module loader without
+# replacing the stable app9 source in git.
+if grep -q "'mobile_nav'" "$BASE/app9.py" && ! grep -q "'security_hardening'" "$BASE/app9.py"; then
+  sed -i "s/'mobile_nav')/'mobile_nav','security_hardening')/" "$BASE/app9.py"
+fi
 chmod 600 "$BASE/app.py" "$BASE/app9.py" 2>/dev/null || true
 PY="$BASE/venv/bin/python"
 [ -x "$PY" ] || { echo "Python venv не найден: $PY"; exit 1; }
-for f in app.py app9.py naiveproxy_panel.py telegram_bot.py system_panel.py advanced_panel.py mobile_nav.py; do
+for f in app.py app9.py naiveproxy_panel.py telegram_bot.py system_panel.py advanced_panel.py mobile_nav.py security_hardening.py; do
   [ -f "$BASE/$f" ] && "$PY" -m py_compile "$BASE/$f"
 done
 
@@ -96,3 +101,4 @@ curl -fsS --max-time 5 http://127.0.0.1:8080/login >/dev/null
 curl -fsS --max-time 5 http://127.0.0.1:8080/about >/dev/null 2>&1 || true
 printf '\nAWG Panel 9.3 установлен и отвечает на HTTP.\n'
 printf 'AWG port: 1234/UDP\n'
+printf 'Security hardening: login rate-limit + audit + HTTP headers\n'
