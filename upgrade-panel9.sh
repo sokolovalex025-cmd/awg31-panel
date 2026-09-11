@@ -7,15 +7,13 @@ BASE=/opt/awg31-panel
 [ -f "$SRC/app9.py" ] || { echo 'app9.py не найден.'; exit 1; }
 mkdir -p "$BASE/backups"
 TS=$(date +%Y%m%d-%H%M%S)
-[ -f "$BASE/app.py" ] && cp -a "$BASE/app.py" "$BASE/backups/app-before-9-$TS.py"
-[ -f "$BASE/app9.py" ] && cp -a "$BASE/app9.py" "$BASE/backups/app9-before-9-$TS.py"
+[ -f "$BASE/app.py" ] && cp -a "$BASE/app.py" "$BASE/backups/app-before-nova-$TS.py"
+[ -f "$BASE/app9.py" ] && cp -a "$BASE/app9.py" "$BASE/backups/app9-before-nova-$TS.py"
 cp "$SRC/app.py" "$BASE/app.py"
 cp "$SRC/app9.py" "$BASE/app9.py"
 for mod in naiveproxy_panel.py telegram_bot.py system_panel.py advanced_panel.py mobile_nav.py security_hardening.py background.svg; do
   [ -f "$SRC/$mod" ] && cp "$SRC/$mod" "$BASE/$mod"
 done
-# Register the security module in the 9.x optional-module loader without
-# replacing the stable app9 source in git.
 if grep -q "'mobile_nav'" "$BASE/app9.py" && ! grep -q "'security_hardening'" "$BASE/app9.py"; then
   sed -i "s/'mobile_nav')/'mobile_nav','security_hardening')/" "$BASE/app9.py"
 fi
@@ -26,12 +24,11 @@ for f in app.py app9.py naiveproxy_panel.py telegram_bot.py system_panel.py adva
   [ -f "$BASE/$f" ] && "$PY" -m py_compile "$BASE/$f"
 done
 
-# AWG 3.1 Strong Mobile: keep the production UDP port at 1234.
-# Preserve all keys, peers and custom options; normalize only the known interface settings.
+# NOVA / AmneziaWG 3.1 Strong Mobile: production UDP port stays 1234.
 CONF=/etc/amnezia/amneziawg/awg0.conf
 [ -f "$CONF" ] || CONF=/etc/wireguard/awg0.conf
 if [ -f "$CONF" ]; then
-  cp -a "$CONF" "$BASE/backups/awg0-before-panel9-$TS.conf"
+  cp -a "$CONF" "$BASE/backups/awg0-before-nova-$TS.conf"
   "$PY" - "$CONF" <<'PY'
 from pathlib import Path
 import sys
@@ -69,6 +66,7 @@ chmod 600 "$SECRET_FILE"
 SECRET=$(cat "$SECRET_FILE")
 
 if [ -f /etc/systemd/system/awgpanel.service ]; then
+  sed -i "s#^Description=.*#Description=NOVA Network Control Center - AmneziaWG 3.1#" /etc/systemd/system/awgpanel.service
   sed -i "s#^ExecStart=.*#ExecStart=$BASE/venv/bin/python $BASE/app9.py#" /etc/systemd/system/awgpanel.service
   if grep -q '^Environment=AWGPANEL_SECRET=' /etc/systemd/system/awgpanel.service; then
     sed -i "s#^Environment=AWGPANEL_SECRET=.*#Environment=AWGPANEL_SECRET=$SECRET#" /etc/systemd/system/awgpanel.service
@@ -78,7 +76,7 @@ if [ -f /etc/systemd/system/awgpanel.service ]; then
 else
   cat >/etc/systemd/system/awgpanel.service <<EOF
 [Unit]
-Description=AWG Panel 9.3 Mobile Strong + AmneziaWG 3.1
+Description=NOVA Network Control Center - AmneziaWG 3.1
 After=network-online.target awg-quick@awg0.service
 Wants=network-online.target
 [Service]
@@ -99,6 +97,7 @@ sleep 2
 systemctl is-active --quiet awgpanel || { journalctl -u awgpanel -n 80 --no-pager; exit 1; }
 curl -fsS --max-time 5 http://127.0.0.1:8080/login >/dev/null
 curl -fsS --max-time 5 http://127.0.0.1:8080/about >/dev/null 2>&1 || true
-printf '\nAWG Panel 9.3 установлен и отвечает на HTTP.\n'
-printf 'AWG port: 1234/UDP\n'
-printf 'Security hardening: login rate-limit + audit + HTTP headers\n'
+printf '\nNOVA Network Control Center установлен и отвечает на HTTP.\n'
+printf 'AmneziaWG 3.1: 1234/UDP\n'
+printf 'Security: login rate-limit + audit + HTTP headers\n'
+printf 'Branding: NOVA\n'
