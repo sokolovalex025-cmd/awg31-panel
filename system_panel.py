@@ -3,6 +3,11 @@
 from flask import render_template_string, jsonify
 import platform, shutil, subprocess, os
 
+# Keep the layout dependency explicit so every route works independently.
+def _layout():
+    from app import layout
+    return layout
+
 def _cmd(*args, timeout=5):
     try:
         return subprocess.run(args, text=True, capture_output=True, timeout=timeout)
@@ -57,13 +62,13 @@ def register(app):
     @app.route('/system')
     def system_page():
         total,used=_mem(); rx,tx=_net(); du=shutil.disk_usage('/')
-        from app import layout
+        layout=_layout()
         body=render_template_string('''<div class="hero"><div><div class="eyebrow">SYSTEM</div><h1>Система</h1><p>Мониторинг VPS и сервисов.</p></div><div class="pill">{{host}}</div></div><div class="grid"><div class="card"><div class="klabel">CPU</div><div class="kvalue">{{cpu}}%</div></div><div class="card"><div class="klabel">RAM</div><div class="kvalue">{{ram}}%</div><div class="muted">{{used}} / {{total}}</div></div><div class="card"><div class="klabel">DISK</div><div class="kvalue">{{disk}}%</div><div class="muted">{{du}} / {{dt}}</div></div><div class="card"><div class="klabel">UPTIME</div><div class="kvalue">{{uptime}}</div></div></div><div class="two"><div class="card"><h2>Сервисы</h2><table>{% for n,s in services %}<tr><td>{{n}}</td><td class="{{'ok' if s=='active' else 'bad'}}">{{s}}</td></tr>{% endfor %}</table></div><div class="card"><h2>Сеть</h2><p>↓ Получено: <b>{{rx}}</b></p><p>↑ Передано: <b>{{tx}}</b></p></div></div><div class="card"><h2>Система</h2><table><tr><td>OS</td><td>{{os}}</td></tr><tr><td>Kernel</td><td>{{kernel}}</td></tr><tr><td>Python</td><td>{{python}}</td></tr><tr><td>Архитектура</td><td>{{arch}}</td></tr></table></div>''',host=platform.node(),cpu=_cpu(),ram=round(used/total*100,1) if total else 0,used=_fmt(used),total=_fmt(total),disk=round(du.used/du.total*100,1),du=_fmt(du.used),dt=_fmt(du.total),uptime=_uptime(),services=_services(),rx=_fmt(rx),tx=_fmt(tx),os=platform.platform(),kernel=platform.release(),python=platform.python_version(),arch=platform.machine())
         return layout('Система',body,'/system')
 
     @app.route('/diagnostics')
     def diagnostics():
-        from app import layout
+        layout=_layout()
         checks=[]
         def add(name,ok,detail=''): checks.append((name,bool(ok),detail))
         try:
