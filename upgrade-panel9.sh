@@ -11,13 +11,13 @@ TS=$(date +%Y%m%d-%H%M%S)
 [ -f "$BASE/app9.py" ] && cp -a "$BASE/app9.py" "$BASE/backups/app9-before-9-$TS.py"
 cp "$SRC/app.py" "$BASE/app.py"
 cp "$SRC/app9.py" "$BASE/app9.py"
-for mod in naiveproxy_panel.py telegram_bot.py system_panel.py advanced_panel.py background.svg; do
+for mod in naiveproxy_panel.py telegram_bot.py system_panel.py advanced_panel.py mobile_nav.py background.svg; do
   [ -f "$SRC/$mod" ] && cp "$SRC/$mod" "$BASE/$mod"
 done
 chmod 600 "$BASE/app.py" "$BASE/app9.py" 2>/dev/null || true
 PY="$BASE/venv/bin/python"
 [ -x "$PY" ] || { echo "Python venv не найден: $PY"; exit 1; }
-for f in app.py app9.py naiveproxy_panel.py telegram_bot.py system_panel.py advanced_panel.py; do
+for f in app.py app9.py naiveproxy_panel.py telegram_bot.py system_panel.py advanced_panel.py mobile_nav.py; do
   [ -f "$BASE/$f" ] && "$PY" -m py_compile "$BASE/$f"
 done
 
@@ -73,7 +73,7 @@ if [ -f /etc/systemd/system/awgpanel.service ]; then
 else
   cat >/etc/systemd/system/awgpanel.service <<EOF
 [Unit]
-Description=AWG Panel 9.2 Mobile Strong + AmneziaWG 3.1
+Description=AWG Panel 9.3 Mobile Strong + AmneziaWG 3.1
 After=network-online.target awg-quick@awg0.service
 Wants=network-online.target
 [Service]
@@ -94,5 +94,5 @@ sleep 2
 systemctl is-active --quiet awgpanel || { journalctl -u awgpanel -n 80 --no-pager; exit 1; }
 curl -fsS --max-time 5 http://127.0.0.1:8080/login >/dev/null
 curl -fsS --max-time 5 http://127.0.0.1:8080/about >/dev/null 2>&1 || true
-printf '\nAWG Panel 9.2 установлен и отвечает на HTTP.\n'
+printf '\nAWG Panel 9.3 установлен и отвечает на HTTP.\n'
 printf 'AWG port: 1234/UDP\n'
