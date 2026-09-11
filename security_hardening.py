@@ -4,6 +4,7 @@ from collections import defaultdict, deque
 from pathlib import Path
 import sqlite3
 import time
+from flask import request
 
 BASE = Path('/opt/awg31-panel')
 DB = BASE / 'panel.db'
@@ -36,8 +37,8 @@ def _audit(ip, event, detail=''):
         pass
 
 
-def _ip(request):
-    return request.remote_addr or 'unknown'
+def _ip(req):
+    return req.remote_addr or 'unknown'
 
 
 def register(app):
@@ -83,7 +84,7 @@ def register(app):
     original_login = app.view_functions.get('login')
     if original_login:
         def secure_login(*args, **kwargs):
-            from flask import request, session
+            from flask import session
             ip = _ip(request)
             if request.method == 'POST':
                 now = time.time()
