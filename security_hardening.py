@@ -2,11 +2,23 @@
 """Security hardening and NOVA branding for the web control center."""
 from collections import defaultdict, deque
 from pathlib import Path
-import sqlite3, time, re
+import sqlite3
+import time
 from flask import request, Response
 BASE=Path('/opt/awg31-panel'); DB=BASE/'panel.db'; WINDOW=600; MAX_FAILURES=8; _BUCKETS=defaultdict(deque)
 NOVA_MARK='''<svg class="nova-mark" viewBox="0 0 64 64" aria-label="NOVA" role="img"><defs><linearGradient id="novaG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="#20e0ff"/><stop offset="1" stop-color="#1455ff"/></linearGradient></defs><rect width="64" height="64" rx="16" fill="#06152b"/><path d="M18 45V19h7l14 18V19h7v26h-7L25 27v18z" fill="url(#novaG)"/></svg>'''
-NOVA_CSS='''<style id="nova-branding">.brand .logo{background:#06152b url('/nova-mark.svg') center/cover no-repeat!important;font-size:0!important}.nova-brand-lockup{display:flex;align-items:center;gap:10px}.nova-brand-lockup b{font-size:17px;letter-spacing:.14em}.nova-brand-lockup small{display:block;color:#8ea5bf;font-size:9px;letter-spacing:.12em;margin-top:2px}.nova-badge{font-size:10px;letter-spacing:.16em;color:#20dfff}@media(max-width:760px){.nova-brand-lockup{gap:8px}.nova-brand-lockup b{font-size:15px}}</style>'''
+NOVA_CSS='''<style id="nova-branding">
+.brand .logo{background:#06152b url('/nova-mark.svg') center/cover no-repeat!important;font-size:0!important}
+.nova-mark{width:34px;height:34px;display:block;filter:drop-shadow(0 0 10px #18cfff66)}
+.nova-brand-lockup{display:flex;align-items:center;gap:10px}.nova-brand-lockup b{font-size:17px;letter-spacing:.14em}.nova-brand-lockup small{display:block;color:#8ea5bf;font-size:9px;letter-spacing:.12em;margin-top:2px}.nova-badge{font-size:10px;letter-spacing:.16em;color:#1ed8ff}
+.nova-login{min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(900px 520px at 50% 0%,rgba(35,177,255,.16),transparent 65%),radial-gradient(700px 420px at 100% 100%,rgba(96,75,255,.12),transparent 65%),#030914;position:relative;overflow:hidden;color:#eef7ff;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+.nova-login:before{content:"";position:absolute;inset:0;opacity:.22;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.02) 1px,transparent 1px);background-size:36px 36px;mask-image:linear-gradient(to bottom,rgba(0,0,0,.8),transparent)}
+.nova-login-orb{position:absolute;width:420px;height:420px;border-radius:50%;border:1px solid rgba(72,191,255,.12);box-shadow:0 0 90px rgba(31,174,255,.08),inset 0 0 70px rgba(31,174,255,.04)}
+.nova-login-card{position:relative;z-index:2;width:min(440px,100%);padding:32px;border:1px solid rgba(118,190,235,.17);border-radius:24px;background:linear-gradient(145deg,rgba(12,27,44,.94),rgba(5,14,25,.96));box-shadow:0 30px 90px rgba(0,0,0,.55),0 0 55px rgba(40,180,255,.07);backdrop-filter:blur(22px)}
+.nova-login-logo{width:82px;height:82px;margin:0 auto 18px;padding:9px;border-radius:23px;background:linear-gradient(145deg,rgba(72,191,255,.20),rgba(20,62,145,.20));border:1px solid rgba(72,191,255,.28);box-shadow:0 0 38px rgba(36,188,255,.16)}.nova-login-logo img{width:100%;height:100%;display:block;border-radius:17px}
+.nova-login-title{text-align:center;font-size:31px;font-weight:850;letter-spacing:-.045em;margin:0;background:linear-gradient(100deg,#fff,#bfeaff 62%,#a49aff);-webkit-background-clip:text;background-clip:text;color:transparent}.nova-login-sub{text-align:center;color:#8097ae;font-size:11px;letter-spacing:.20em;text-transform:uppercase;margin:8px 0 26px}.nova-login-label{display:block;color:#a9bacb;font-size:12px;font-weight:700;margin:14px 0 6px}.nova-login input{width:100%;padding:13px 14px;border-radius:11px;background:#061321!important;color:#f1f8ff!important;border:1px solid rgba(125,175,210,.20)!important;outline:none;font-size:14px}.nova-login input:focus{border-color:rgba(65,197,255,.58)!important;box-shadow:0 0 0 4px rgba(50,187,255,.09)}.nova-login button{width:100%;margin-top:18px;padding:13px;border-radius:11px;border:1px solid rgba(74,207,255,.35);background:linear-gradient(100deg,#087ec9,#2654e8)!important;color:#fff!important;font-size:14px;font-weight:800;letter-spacing:.02em;cursor:pointer;box-shadow:0 10px 28px rgba(21,125,225,.22)}.nova-login button:hover{filter:brightness(1.08);transform:translateY(-1px)}.nova-login-status{display:flex;justify-content:center;gap:8px;align-items:center;margin-top:22px;color:#718aa1;font-size:11px}.nova-login-status i{width:7px;height:7px;border-radius:50%;background:#43d39e;box-shadow:0 0 12px #43d39e;display:block}.nova-login-footer{text-align:center;color:#536a80;font-size:10px;letter-spacing:.08em;margin-top:24px}.nova-login-error{margin:0 0 12px;padding:10px 12px;border-radius:10px;background:rgba(255,76,105,.08);border:1px solid rgba(255,76,105,.18);color:#ff9eae;font-size:12px;text-align:center}
+@media(max-width:520px){.nova-login{padding:16px}.nova-login-card{padding:25px 20px;border-radius:20px}.nova-login-logo{width:70px;height:70px}.nova-login-title{font-size:27px}}
+</style>'''
 def _db():
  c=sqlite3.connect(DB); c.execute('''CREATE TABLE IF NOT EXISTS security_audit (id INTEGER PRIMARY KEY AUTOINCREMENT,ts INTEGER NOT NULL,ip TEXT NOT NULL,event TEXT NOT NULL,detail TEXT DEFAULT '')'''); c.commit(); return c
 def _audit(ip,event,detail=''):
@@ -67,13 +79,11 @@ def register(app):
   if 'text/html' not in response.headers.get('Content-Type',''):return response
   try:
    html=response.get_data(as_text=True)
-   for old in ('AWG Panel 9.3','AWG Panel 9.2','AWG Panel 9.0','AWG Panel 8.1'):html=html.replace(old,'NOVA Network Control Center')
-   html=html.replace('AWG Panel','NOVA')
-   brand=re.compile(r'<div class=brand><div class=logo>.*?</div><div><h2>.*?</h2><small>.*?</small></div></div>',re.S)
-   nova_brand='<div class="brand"><div class="logo" aria-label="NOVA"></div><div><h2>NOVA <span>Network</span></h2><small>Network Control Center</small></div></div>'
-   html=brand.sub(nova_brand,html)
-   html=html.replace('<title>','<link rel="icon" href="/nova-mark.svg" type="image/svg+xml"><meta name="theme-color" content="#050b14"><title>',1)
-   html=html.replace('</head>',NOVA_CSS+'</head>',1)
+   if request.path=='/login':
+    html='''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NOVA Network Control Center</title>'''+NOVA_CSS+'''</head><body><main class="nova-login"><div class="nova-login-orb"></div><section class="nova-login-card"><div class="nova-login-logo"><img src="/nova-mark.svg" alt="NOVA"></div><h1 class="nova-login-title">NOVA</h1><div class="nova-login-sub">NETWORK CONTROL CENTER</div>'''+('''<div class="nova-login-error">Неверный логин или пароль</div>''' if request.method=='POST' else '')+'''<form method="post" autocomplete="on"><label class="nova-login-label" for="login">Логин</label><input id="login" name="login" autocomplete="username" autofocus required><label class="nova-login-label" for="password">Пароль</label><input id="password" name="password" type="password" autocomplete="current-password" required><button type="submit">Войти в NOVA</button></form><div class="nova-login-status"><i></i><span>Network Control Center · Secure Session</span></div><div class="nova-login-footer">AmneziaWG 3.1 · Strong Mobile</div></section></main></body></html>'''
+   else:
+    for old in ('AWG Panel 9.3','AWG Panel 9.2','AWG Panel 9.0','AWG Panel 8.1'):html=html.replace(old,'NOVA Network Control Center')
+    html=html.replace('AWG Panel','NOVA'); html=html.replace('</head>',NOVA_CSS+'</head>',1)
    response.set_data(html)
   except Exception:pass
   return response
