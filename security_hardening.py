@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
-"""AWG Panel security hardening: login throttling, audit trail and HTTP headers."""
+"""Security hardening and NOVA branding for the web control center."""
 from collections import defaultdict, deque
 from pathlib import Path
 import sqlite3
 import time
-from flask import request
+from flask import request, Response
 
 BASE = Path('/opt/awg31-panel')
 DB = BASE / 'panel.db'
 WINDOW = 600
 MAX_FAILURES = 8
 _BUCKETS = defaultdict(deque)
+
+NOVA_MARK='''<svg class="nova-mark" viewBox="0 0 64 64" aria-label="NOVA" role="img"><defs><linearGradient id="novaG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="#20e0ff"/><stop offset="1" stop-color="#1455ff"/></linearGradient></defs><rect width="64" height="64" rx="16" fill="#06152b"/><path d="M18 45V19h7l14 18V19h7v26h-7L25 27v18z" fill="url(#novaG)"/></svg>'''
+NOVA_CSS='''<style id="nova-branding">.nova-mark{width:34px;height:34px;display:block;filter:drop-shadow(0 0 10px #18cfff66)}.nova-brand-lockup{display:flex;align-items:center;gap:10px}.nova-brand-lockup b{font-size:17px;letter-spacing:.14em}.nova-brand-lockup small{display:block;color:#8ea5bf;font-size:9px;letter-spacing:.12em;margin-top:2px}.nova-badge{font-size:10px;letter-spacing:.16em;color:#1ed8ff}@media(max-width:760px){.nova-mark{width:32px;height:32px}.nova-brand-lockup{gap:8px}.nova-brand-lockup b{font-size:15px}}</style>'''
 
 
 def _db():
@@ -131,5 +134,24 @@ def register(app):
         {% for r in rows %}<tr><td>{{r[0]|int}}</td><td>{{r[1]}}</td><td>{{r[2]}}</td><td class=muted>{{r[3]}}</td></tr>{% else %}<tr><td colspan=4 class=muted>Событий пока нет</td></tr>{% endfor %}</table></div>
         ''', rows=rows)
         return core.layout('Security Audit', body, '/security/audit')
+
+    @app.after_request
+    def _nova_branding(response):
+        if 'text/html' not in response.headers.get('Content-Type',''):
+            return response
+        try:
+            html=response.get_data(as_text=True)
+            for old in ('AWG Panel 9.3','AWG Panel 9.2','AWG Panel 9.0','AWG Panel 8.1'):
+                html=html.replace(old,'NOVA Network Control Center')
+            html=html.replace('AWG Panel','NOVA')
+            html=html.replace('</head>',NOVA_CSS+'</head>',1)
+            response.set_data(html)
+        except Exception:
+            pass
+        return response
+
+    @app.route('/nova-mark.svg')
+    def nova_mark():
+        return Response(NOVA_MARK, mimetype='image/svg+xml', headers={'Cache-Control':'public, max-age=86400'})
 
     app._security_hardening_93 = True
