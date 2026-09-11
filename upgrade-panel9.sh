@@ -21,6 +21,38 @@ for f in app.py app9.py naiveproxy_panel.py telegram_bot.py system_panel.py adva
   [ -f "$BASE/$f" ] && "$PY" -m py_compile "$BASE/$f"
 done
 
+# AWG 3.1 Strong Mobile: keep the production UDP port at 1234.
+# Preserve all keys, peers and custom options; normalize only the known interface settings.
+CONF=/etc/amnezia/amneziawg/awg0.conf
+[ -f "$CONF" ] || CONF=/etc/wireguard/awg0.conf
+if [ -f "$CONF" ]; then
+  cp -a "$CONF" "$BASE/backups/awg0-before-panel9-$TS.conf"
+  "$PY" - "$CONF" <<'PY'
+from pathlib import Path
+import sys
+p=Path(sys.argv[1]); text=p.read_text(errors='replace')
+updates={'ListenPort':'1234','MTU':'1280','Jc':'4','Jmin':'40','Jmax':'120','S1':'16','S2':'24','S3':'16','S4':'32','H1':'1','H2':'2','H3':'3','H4':'4','RandomTrailers':'on','DisableCookies':'on'}
+lines=text.splitlines(); out=[]; seen=set(); in_iface=False
+for line in lines:
+    st=line.strip()
+    if st.startswith('['): in_iface=(st=='[Interface]')
+    if in_iface and '=' in st and not st.startswith('#'):
+        k=st.split('=',1)[0].strip()
+        if k in updates:
+            out.append(f'{k} = {updates[k]}'); seen.add(k); continue
+    out.append(line)
+idx=next((i for i,x in enumerate(out) if x.strip()=='[Peer]'),len(out))
+missing=[f'{k} = {v}' for k,v in updates.items() if k not in seen]
+out[idx:idx]=missing
+p.write_text('\n'.join(out).rstrip()+'\n'); p.chmod(0o600)
+PY
+  if systemctl is-active --quiet awg-quick@awg0; then
+    systemctl restart awg-quick@awg0
+    sleep 2
+    systemctl is-active --quiet awg-quick@awg0 || { systemctl status awg-quick@awg0 --no-pager -l || true; journalctl -u awg-quick@awg0 -n 50 --no-pager || true; exit 1; }
+  fi
+fi
+
 SECRET_FILE=/etc/awg31-panel/panel-secret
 mkdir -p /etc/awg31-panel
 chmod 700 /etc/awg31-panel
@@ -41,7 +73,7 @@ if [ -f /etc/systemd/system/awgpanel.service ]; then
 else
   cat >/etc/systemd/system/awgpanel.service <<EOF
 [Unit]
-Description=AWG Panel 9.0
+Description=AWG Panel 9.2 Mobile Strong + AmneziaWG 3.1
 After=network-online.target awg-quick@awg0.service
 Wants=network-online.target
 [Service]
@@ -62,4 +94,5 @@ sleep 2
 systemctl is-active --quiet awgpanel || { journalctl -u awgpanel -n 80 --no-pager; exit 1; }
 curl -fsS --max-time 5 http://127.0.0.1:8080/login >/dev/null
 curl -fsS --max-time 5 http://127.0.0.1:8080/about >/dev/null 2>&1 || true
-printf '\nAWG Panel 9.0 установлен и отвечает на HTTP.\n'
+printf '\nAWG Panel 9.2 установлен и отвечает на HTTP.\n'
+printf 'AWG port: 1234/UDP\n'
