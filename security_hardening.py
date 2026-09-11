@@ -37,8 +37,6 @@ def _audit(ip, event, detail=''):
 
 
 def _ip(request):
-    # Do not trust X-Forwarded-For: the panel is intended to sit behind a
-    # trusted local/reverse-proxy setup only when explicitly configured there.
     return request.remote_addr or 'unknown'
 
 
@@ -46,9 +44,10 @@ def register(app):
     if getattr(app, '_security_hardening_93', False):
         return
 
+    import app as core
     app.config.setdefault('SESSION_COOKIE_HTTPONLY', True)
     app.config.setdefault('SESSION_COOKIE_SAMESITE', 'Lax')
-    app.config.setdefault('SESSION_COOKIE_SECURE', False)  # panel may run on HTTP:8080
+    app.config.setdefault('SESSION_COOKIE_SECURE', False)
     app.config.setdefault('PERMANENT_SESSION_LIFETIME', 3600)
 
     try:
@@ -130,8 +129,6 @@ def register(app):
         <div class=card><table><tr><th>Время</th><th>IP</th><th>Событие</th><th>Детали</th></tr>
         {% for r in rows %}<tr><td>{{r[0]|int}}</td><td>{{r[1]}}</td><td>{{r[2]}}</td><td class=muted>{{r[3]}}</td></tr>{% else %}<tr><td colspan=4 class=muted>Событий пока нет</td></tr>{% endfor %}</table></div>
         ''', rows=rows)
-        return app.layout('Security Audit', body, '/security/audit') if hasattr(app, 'layout') else body
+        return core.layout('Security Audit', body, '/security/audit')
 
-    # Make the login UI identify the current hardened release without changing
-    # the authentication semantics or default credentials.
     app._security_hardening_93 = True
