@@ -2,12 +2,11 @@
 """Security hardening and NOVA branding for the web control center."""
 from collections import defaultdict, deque
 from pathlib import Path
-import sqlite3
-import time
+import sqlite3, time, re
 from flask import request, Response
 BASE=Path('/opt/awg31-panel'); DB=BASE/'panel.db'; WINDOW=600; MAX_FAILURES=8; _BUCKETS=defaultdict(deque)
 NOVA_MARK='''<svg class="nova-mark" viewBox="0 0 64 64" aria-label="NOVA" role="img"><defs><linearGradient id="novaG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="#20e0ff"/><stop offset="1" stop-color="#1455ff"/></linearGradient></defs><rect width="64" height="64" rx="16" fill="#06152b"/><path d="M18 45V19h7l14 18V19h7v26h-7L25 27v18z" fill="url(#novaG)"/></svg>'''
-NOVA_CSS='''<style id="nova-branding">.brand .logo{background:#06152b url('/nova-mark.svg') center/cover no-repeat!important;font-size:0!important}.nova-mark{width:34px;height:34px;display:block;filter:drop-shadow(0 0 10px #18cfff66)}.nova-brand-lockup{display:flex;align-items:center;gap:10px}.nova-brand-lockup b{font-size:17px;letter-spacing:.14em}.nova-brand-lockup small{display:block;color:#8ea5bf;font-size:9px;letter-spacing:.12em;margin-top:2px}.nova-badge{font-size:10px;letter-spacing:.16em;color:#1ed8ff}@media(max-width:760px){.nova-mark{width:32px;height:32px}.nova-brand-lockup{gap:8px}.nova-brand-lockup b{font-size:15px}}</style>'''
+NOVA_CSS='''<style id="nova-branding">.brand .logo{background:#06152b url('/nova-mark.svg') center/cover no-repeat!important;font-size:0!important}.nova-brand-lockup{display:flex;align-items:center;gap:10px}.nova-brand-lockup b{font-size:17px;letter-spacing:.14em}.nova-brand-lockup small{display:block;color:#8ea5bf;font-size:9px;letter-spacing:.12em;margin-top:2px}.nova-badge{font-size:10px;letter-spacing:.16em;color:#20dfff}@media(max-width:760px){.nova-brand-lockup{gap:8px}.nova-brand-lockup b{font-size:15px}}</style>'''
 def _db():
  c=sqlite3.connect(DB); c.execute('''CREATE TABLE IF NOT EXISTS security_audit (id INTEGER PRIMARY KEY AUTOINCREMENT,ts INTEGER NOT NULL,ip TEXT NOT NULL,event TEXT NOT NULL,detail TEXT DEFAULT '')'''); c.commit(); return c
 def _audit(ip,event,detail=''):
@@ -69,7 +68,13 @@ def register(app):
   try:
    html=response.get_data(as_text=True)
    for old in ('AWG Panel 9.3','AWG Panel 9.2','AWG Panel 9.0','AWG Panel 8.1'):html=html.replace(old,'NOVA Network Control Center')
-   html=html.replace('AWG Panel','NOVA'); html=html.replace('</head>',NOVA_CSS+'</head>',1); response.set_data(html)
+   html=html.replace('AWG Panel','NOVA')
+   brand=re.compile(r'<div class=brand><div class=logo>.*?</div><div><h2>.*?</h2><small>.*?</small></div></div>',re.S)
+   nova_brand='<div class="brand"><div class="logo" aria-label="NOVA"></div><div><h2>NOVA <span>Network</span></h2><small>Network Control Center</small></div></div>'
+   html=brand.sub(nova_brand,html)
+   html=html.replace('<title>','<link rel="icon" href="/nova-mark.svg" type="image/svg+xml"><meta name="theme-color" content="#050b14"><title>',1)
+   html=html.replace('</head>',NOVA_CSS+'</head>',1)
+   response.set_data(html)
   except Exception:pass
   return response
  @app.route('/nova-mark.svg')
