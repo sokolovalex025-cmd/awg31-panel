@@ -6,7 +6,7 @@ import app as core
 sys.modules['app']=core
 core.VERSION='9.3'; core.BG_VERSION='93'
 
-for name in ('naiveproxy_panel','telegram_bot','system_panel','advanced_panel'):
+for name in ('naiveproxy_panel','telegram_bot','system_panel','advanced_panel','mobile_nav'):
     try:
         mod=__import__(name)
         if hasattr(mod,'register'): mod.register(core.app)
