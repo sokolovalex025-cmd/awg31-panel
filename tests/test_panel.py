@@ -21,7 +21,7 @@ def test_app9_import_smoke():
     mod = importlib.import_module("app9")
     assert mod.core.VERSION == "9.2"
     assert mod.core.app.url_map._rules_by_endpoint["health9"][0].rule == "/api/health9"
-    assert mod.core.app.url_map._rules_by_endpoint["diagnostics92"][0].rule == "/diagnostics"
+    assert mod.core.app.url_map._rules_by_endpoint["diagnostics"][0].rule == "/diagnostics"
 
 
 def test_diagnostics_smoke():
