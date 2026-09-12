@@ -1,0 +1,54 @@
+name: Build NOVA AWG 3.1 Client
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/android-awg31-client.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout NOVA panel
+        uses: actions/checkout@v4
+
+      - name: Checkout official AmneziaWG Android 3.1
+        uses: actions/checkout@v4
+        with:
+          repository: amnezia-vpn/amneziawg-android
+          ref: master
+          path: amneziawg-android
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build official AmneziaWG 3.1 debug APK
+        working-directory: amneziawg-android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace assembleDebug
+
+      - name: Verify APK
+        run: |
+          test -f amneziawg-android/ui/build/outputs/apk/debug/ui-debug.apk
+          cp amneziawg-android/ui/build/outputs/apk/debug/ui-debug.apk NOVA-AWG31-debug.apk
+
+      - name: Upload real AWG 3.1 VPN client
+        uses: actions/upload-artifact@v4
+        with:
+          name: NOVA-AWG31-debug
+          path: NOVA-AWG31-debug.apk
+          if-no-files-found: error
