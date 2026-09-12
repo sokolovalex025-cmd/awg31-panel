@@ -9,7 +9,7 @@ CONF=/etc/amnezia/amneziawg/awg0.conf
 IFACE="$(ip route show default | awk 'NR==1{print $5}')"
 [[ -n "$IFACE" ]] || { echo "ERROR: default interface not found"; exit 2; }
 
-# Detect tunnel subnet from Address= or fall back to the panel's known subnet.
+# Detect tunnel subnet from server Address= or fall back to the panel's known subnet.
 SUBNET="$(awk -F= '/^[[:space:]]*Address[[:space:]]*=/{gsub(/[[:space:]]/,"",$2); print $2; exit}' "$CONF" | cut -d/ -f1)"
 SUBNET="${SUBNET:-10.66.66.1}"
 PREFIX="$(echo "$SUBNET" | awk -F. '{print $1"."$2"."$3}')"
@@ -41,12 +41,14 @@ iptables -C FORWARD -i "$IFACE" -o awg0 -m conntrack --ctstate RELATED,ESTABLISH
 
 if command -v netfilter-persistent >/dev/null 2>&1; then netfilter-persistent save || true; fi
 
-# Install a small local DNS forwarder if none is listening on the tunnel address.
+# Install a local DNS forwarder if none is listening on UDP/TCP 53.
 if ! ss -lunpt 2>/dev/null | grep -qE '(:53[[:space:]]|:53$)'; then
   apt-get update -qq
   DEBIAN_FRONTEND=noninteractive apt-get install -y -qq dnsmasq
 fi
 
+# Some minimal Ubuntu images do not create /etc/dnsmasq.d until dnsmasq is configured.
+install -d -m 755 /etc/dnsmasq.d
 DNSCONF=/etc/dnsmasq.d/nova-awg.conf
 cat > "$DNSCONF" <<EOF
 # NOVA DNS for AWG clients
@@ -57,7 +59,14 @@ server=1.1.1.1
 server=8.8.8.8
 cache-size=1000
 EOF
-systemctl restart dnsmasq
+chmod 600 "$DNSCONF"
+
+if ! systemctl restart dnsmasq; then
+  echo "ERROR: dnsmasq failed to start. Diagnostics:"
+  systemctl --no-pager --full status dnsmasq || true
+  journalctl -u dnsmasq -n 40 --no-pager || true
+  exit 3
+fi
 
 # Store the chosen DNS only in local server config; never put credentials here.
 chmod 600 "$DNSCONF"
