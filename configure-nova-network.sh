@@ -3,13 +3,14 @@ set -euo pipefail
 
 ENV=/etc/awg31-panel/network.env
 CONF=/etc/amnezia/amneziawg/awg0.conf
+DNSCONF=/etc/dnsmasq.d/nova-awg.conf
 
+[[ $EUID -eq 0 ]] || { echo "ERROR: run as root"; exit 1; }
 [[ -f "$CONF" ]] || { echo "ERROR: $CONF not found"; exit 1; }
 
 IFACE="$(ip route show default | awk 'NR==1{print $5}')"
 [[ -n "$IFACE" ]] || { echo "ERROR: default interface not found"; exit 2; }
 
-# Detect tunnel subnet from server Address= or fall back to the panel's known subnet.
 SUBNET="$(awk -F= '/^[[:space:]]*Address[[:space:]]*=/{gsub(/[[:space:]]/,"",$2); print $2; exit}' "$CONF" | cut -d/ -f1)"
 SUBNET="${SUBNET:-10.66.66.1}"
 PREFIX="$(echo "$SUBNET" | awk -F. '{print $1"."$2"."$3}')"
@@ -26,7 +27,6 @@ VPN_DISABLE_IPV6_LEAK=1
 EOF
 chmod 600 "$ENV"
 
-# Enable IPv4 forwarding. Disable IPv6 forwarding so client IPv6 cannot escape outside AWG.
 cat >/etc/sysctl.d/99-nova-vpn.conf <<EOF
 net.ipv4.ip_forward=1
 net.ipv6.conf.all.forwarding=0
@@ -34,22 +34,23 @@ net.ipv6.conf.default.forwarding=0
 EOF
 sysctl --system >/dev/null
 
-# NAT + forwarding for VPN clients. Rules are idempotent.
 iptables -t nat -C POSTROUTING -s "$CLIENT_NET" -o "$IFACE" -j MASQUERADE 2>/dev/null || iptables -t nat -A POSTROUTING -s "$CLIENT_NET" -o "$IFACE" -j MASQUERADE
 iptables -C FORWARD -i awg0 -o "$IFACE" -j ACCEPT 2>/dev/null || iptables -A FORWARD -i awg0 -o "$IFACE" -j ACCEPT
 iptables -C FORWARD -i "$IFACE" -o awg0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || iptables -A FORWARD -i "$IFACE" -o awg0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 
 if command -v netfilter-persistent >/dev/null 2>&1; then netfilter-persistent save || true; fi
 
-# Install a local DNS forwarder if none is listening on UDP/TCP 53.
-if ! ss -lunpt 2>/dev/null | grep -qE '(:53[[:space:]]|:53$)'; then
+# Always ensure dnsmasq is installed. Do not rely on port 53 detection: another
+# resolver (for example systemd-resolved) may listen on a different address.
+if ! command -v dnsmasq >/dev/null 2>&1; then
   apt-get update -qq
   DEBIAN_FRONTEND=noninteractive apt-get install -y -qq dnsmasq
 fi
 
-# Some minimal Ubuntu images do not create /etc/dnsmasq.d until dnsmasq is configured.
+# The directory may be missing on minimal Ubuntu images. Create it BEFORE the
+# redirection below; this is the exact failure fixed by this version.
 install -d -m 755 /etc/dnsmasq.d
-DNSCONF=/etc/dnsmasq.d/nova-awg.conf
+
 cat > "$DNSCONF" <<EOF
 # NOVA DNS for AWG clients
 listen-address=$DNS_IP
@@ -59,7 +60,10 @@ server=1.1.1.1
 server=8.8.8.8
 cache-size=1000
 EOF
-chmod 600 "$DNSCONF"
+chmod 644 "$DNSCONF"
+
+# Validate configuration before restarting the resolver.
+dnsmasq --test
 
 if ! systemctl restart dnsmasq; then
   echo "ERROR: dnsmasq failed to start. Diagnostics:"
@@ -68,15 +72,14 @@ if ! systemctl restart dnsmasq; then
   exit 3
 fi
 
-# Store the chosen DNS only in local server config; never put credentials here.
-chmod 600 "$DNSCONF"
+if ! ss -lunpt 2>/dev/null | grep -qE "${DNS_IP//./\\.}:53([[:space:]]|$)"; then
+  echo "WARNING: dnsmasq restarted, but $DNS_IP:53 was not found in socket list."
+fi
 
-# Add a DNS comment/marker to make the server setting visible to diagnostics.
 if ! grep -q '^# NOVA_DNS=' "$CONF"; then
   sed -i "1i# NOVA_DNS=$DNS_IP" "$CONF"
 fi
 
-# Reload AWG without touching the 3.1 obfuscation values.
 if systemctl is-active --quiet awg-quick@awg0; then
   awg-quick strip awg0 >/tmp/nova-awg.strip
   awg syncconf awg0 /tmp/nova-awg.strip
@@ -89,8 +92,8 @@ Interface:  $IFACE
 Client net: $CLIENT_NET
 VPN DNS:    $DNS_IP
 Full IPv4:  0.0.0.0/0
-IPv6:       forwarding disabled (no IPv6 egress outside AWG)
-DNS:        dnsmasq -> 1.1.1.1 / 8.8.8.8
+IPv6:       forwarding disabled
+DNS:        local dnsmasq -> 1.1.1.1 / 8.8.8.8
 
-NOTE: 1.1.1.1 and 8.8.8.8 are upstream resolvers only; clients query the VPN DNS address.
+Clients should use $DNS_IP as DNS. Public resolvers above are upstream only.
 EOF
