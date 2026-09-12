@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
 ENV=/etc/awg31-panel/network.env
 CONF=/etc/amnezia/amneziawg/awg0.conf
-DNSCONF=/etc/dnsmasq.d/nova-awg.conf
+DNS_DIR=/etc/dnsmasq.d
+DNSCONF=$DNS_DIR/nova-awg.conf
+
+trap 'echo "ERROR: configure-nova-network.sh failed at line $LINENO" >&2' ERR
 
 [[ $EUID -eq 0 ]] || { echo "ERROR: run as root"; exit 1; }
 [[ -f "$CONF" ]] || { echo "ERROR: $CONF not found"; exit 1; }
 
-IFACE="$(ip route show default | awk 'NR==1{print $5}')"
+IFACE="$(ip route show default 2>/dev/null | awk 'NR==1{print $5}')"
 [[ -n "$IFACE" ]] || { echo "ERROR: default interface not found"; exit 2; }
 
 SUBNET="$(awk -F= '/^[[:space:]]*Address[[:space:]]*=/{gsub(/[[:space:]]/,"",$2); print $2; exit}' "$CONF" | cut -d/ -f1)"
@@ -18,6 +21,8 @@ CLIENT_NET="${PREFIX}.0/24"
 DNS_IP="$SUBNET"
 
 install -d -m 700 /etc/awg31-panel
+install -d -m 755 "$DNS_DIR"
+
 cat > "$ENV" <<EOF
 VPN_PUBLIC_INTERFACE=$IFACE
 VPN_CLIENT_NETWORK=$CLIENT_NET
@@ -40,21 +45,24 @@ iptables -C FORWARD -i "$IFACE" -o awg0 -m conntrack --ctstate RELATED,ESTABLISH
 
 if command -v netfilter-persistent >/dev/null 2>&1; then netfilter-persistent save || true; fi
 
-# Always ensure dnsmasq is installed. Do not rely on port 53 detection: another
-# resolver (for example systemd-resolved) may listen on a different address.
 if ! command -v dnsmasq >/dev/null 2>&1; then
   apt-get update -qq
   DEBIAN_FRONTEND=noninteractive apt-get install -y -qq dnsmasq
 fi
 
-# The directory may be missing on minimal Ubuntu images. Create it BEFORE the
-# redirection below; this is the exact failure fixed by this version.
-install -d -m 755 /etc/dnsmasq.d
+# Do this immediately before the redirection. Minimal Ubuntu images can lack it.
+if [[ -e "$DNS_DIR" && ! -d "$DNS_DIR" ]]; then
+  echo "ERROR: $DNS_DIR exists but is not a directory" >&2
+  ls -ld "$DNS_DIR" >&2 || true
+  exit 3
+fi
+install -d -m 755 "$DNS_DIR"
+[[ -d "$DNS_DIR" ]] || { echo "ERROR: cannot create $DNS_DIR" >&2; exit 3; }
 
 cat > "$DNSCONF" <<EOF
 # NOVA DNS for AWG clients
 listen-address=$DNS_IP
-bind-interfaces
+bind-dynamic
 no-resolv
 server=1.1.1.1
 server=8.8.8.8
@@ -62,18 +70,19 @@ cache-size=1000
 EOF
 chmod 644 "$DNSCONF"
 
-# Validate configuration before restarting the resolver.
 dnsmasq --test
 
 if ! systemctl restart dnsmasq; then
-  echo "ERROR: dnsmasq failed to start. Diagnostics:"
+  echo "ERROR: dnsmasq failed to start. Diagnostics:" >&2
   systemctl --no-pager --full status dnsmasq || true
   journalctl -u dnsmasq -n 40 --no-pager || true
-  exit 3
+  exit 4
 fi
 
-if ! ss -lunpt 2>/dev/null | grep -qE "${DNS_IP//./\\.}:53([[:space:]]|$)"; then
-  echo "WARNING: dnsmasq restarted, but $DNS_IP:53 was not found in socket list."
+if ! ss -lunpt 2>/dev/null | grep -qE "([.:])53[[:space:]]"; then
+  echo "ERROR: no DNS listener detected after dnsmasq restart" >&2
+  systemctl --no-pager --full status dnsmasq || true
+  exit 5
 fi
 
 if ! grep -q '^# NOVA_DNS=' "$CONF"; then
@@ -83,6 +92,7 @@ fi
 if systemctl is-active --quiet awg-quick@awg0; then
   awg-quick strip awg0 >/tmp/nova-awg.strip
   awg syncconf awg0 /tmp/nova-awg.strip
+  rm -f /tmp/nova-awg.strip
 fi
 
 cat <<EOF
