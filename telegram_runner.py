@@ -5,12 +5,13 @@ from pathlib import Path
 import telegram_bot
 
 DB = Path('/opt/awg31-panel/panel.db')
+ORIGINAL_ENV = telegram_bot.env
 
 def panel_env():
     values = {}
     try:
         con = sqlite3.connect(DB)
-        for key, value in con.execute("SELECT k,v FROM settings WHERE k IN ('telegram_token','telegram_admins','telegram_notify','telegram_default_days')"):
+        for key, value in con.execute("SELECT k,v FROM settings WHERE k IN ('telegram_token','telegram_admins','telegram_default_days')"):
             values[key] = value or ''
         con.close()
     except Exception:
@@ -19,7 +20,7 @@ def panel_env():
 
 def env_bridge():
     values = panel_env()
-    current = telegram_bot.env()
+    current = ORIGINAL_ENV()
     if values.get('telegram_token'):
         current['TELEGRAM_BOT_TOKEN'] = values['telegram_token']
     if values.get('telegram_admins'):
