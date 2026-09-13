@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Keenetic-compatible AWG 2.0 profile using the already installed, matching
-# AmneziaWG kernel/userspace on the VPS. The existing NOVA awg0 (AWG 3.1)
-# interface is never modified.
+# NOVA Keenetic-compatible AWG 2.0 profile.
+# The existing NOVA AWG 3.1 awg0 interface is never modified.
+#
+# IMPORTANT: awg setconf accepts only AWG parameters. Address, PostUp and
+# PostDown are awg-quick/iproute2 settings and are deliberately kept out of
+# the file passed to awg setconf.
 
 [ "$(id -u)" -eq 0 ] || { echo 'Run as root.'; exit 1; }
 
@@ -22,8 +25,8 @@ case "$PORT" in
 esac
 [ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ] || { echo 'Port must be 1..65535.'; exit 1; }
 
-command -v awg >/dev/null 2>&1 || { echo 'Matching AmneziaWG tools are not installed.'; exit 1; }
-command -v awg-quick >/dev/null 2>&1 || { echo 'awg-quick is not installed.'; exit 1; }
+command -v awg >/dev/null 2>&1 || { echo 'AmneziaWG tools are not installed.'; exit 1; }
+command -v ip >/dev/null 2>&1 || { echo 'iproute2 is not installed.'; exit 1; }
 
 HOST_AWG_VERSION=$(awg --version 2>/dev/null | head -1 || true)
 MODULE_VERSION=$(modinfo -F version amneziawg 2>/dev/null || true)
@@ -36,6 +39,7 @@ case "$MODULE_VERSION" in
   *) echo "Unsupported amneziawg kernel module: ${MODULE_VERSION:-unknown}"; exit 1;;
 esac
 
+# Do not silently collide with another service.
 if ss -lunH 2>/dev/null | awk '{print $5}' | grep -Eq ":${PORT}$"; then
   echo "UDP port $PORT is already in use. Set KEENETIC_AWG2_PORT to another free port."
   exit 1
@@ -44,13 +48,12 @@ fi
 mkdir -p "$BASE/config" "$BASE/clients"
 chmod 700 "$BASE" "$BASE/config" "$BASE/clients"
 
-# Stop/remove the broken Docker bridge from previous versions. Do not touch NOVA awg0.
+# Remove only the obsolete Docker bridge from previous versions.
 if command -v docker >/dev/null 2>&1 && docker ps -a --format '{{.Names}}' | grep -qx keenetic-awg2; then
   docker rm -f keenetic-awg2 >/dev/null 2>&1 || true
 fi
 
-# Bring down only our dedicated interface if an older installation exists.
-awg-quick down "$BASE/config/${IFACE}.conf" >/dev/null 2>&1 || true
+# Remove an older instance of our dedicated interface.
 ip link del "$IFACE" >/dev/null 2>&1 || true
 
 if [ -f "$BASE/config/server_private.key" ]; then
@@ -79,15 +82,12 @@ else
   chmod 600 "$BASE/config/psk.key"
 fi
 
-# KeeneticOS 5.1+ expects the AWG 1.5/2.0-style fields. I1-I5 are omitted.
-# The VPS uses the matching AWG 3.1 tools/kernel, but this profile only uses
-# the AWG 2.0-compatible J/S/H parameter set.
+# This is the canonical server AWG config. It intentionally contains ONLY
+# parameters understood by `awg setconf`; no Address/PostUp/PostDown lines.
 cat >"$BASE/config/${IFACE}.conf" <<EOF
 [Interface]
 PrivateKey = $SERVER_PRIVATE_KEY
-Address = $SERVER_IP/24
 ListenPort = $PORT
-MTU = $MTU
 Jc = 3
 Jmin = 10
 Jmax = 30
@@ -99,8 +99,6 @@ H1 = 1
 H2 = 2
 H3 = 3
 H4 = 4
-PostUp = iptables -A FORWARD -i %i -s $SUBNET -j ACCEPT; iptables -A FORWARD -o %i -d $SUBNET -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT; iptables -t nat -A POSTROUTING -s $SUBNET -o $WAN_IF -j MASQUERADE
-PostDown = iptables -D FORWARD -i %i -s $SUBNET -j ACCEPT; iptables -D FORWARD -o %i -d $SUBNET -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT; iptables -t nat -D POSTROUTING -s $SUBNET -o $WAN_IF -j MASQUERADE
 
 [Peer]
 PublicKey = $CLIENT_PUBLIC_KEY
@@ -112,6 +110,7 @@ chmod 600 "$BASE/config/${IFACE}.conf"
 PUBLIC_IP=$(curl -4 -fsS --max-time 5 https://api.ipify.org || true)
 [ -n "${PUBLIC_IP:-}" ] || PUBLIC_IP="SERVER_IP"
 
+# Client profile for KeeneticOS AWG 2.0-compatible import.
 cat >"$BASE/clients/keenetic-awg2.conf" <<EOF
 [Interface]
 PrivateKey = $CLIENT_PRIVATE_KEY
@@ -141,36 +140,41 @@ chmod 600 "$BASE/clients/keenetic-awg2.conf"
 
 sysctl -w net.ipv4.ip_forward=1 >/dev/null
 printf '%s\n' 'net.ipv4.ip_forward=1' >/etc/sysctl.d/99-keenetic-awg2.conf
-iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || iptables -A INPUT -p udp --dport "$PORT" -j ACCEPT
 
-# Validate the exact server config with the same AWG userspace/kernel pair.
+iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || \
+  iptables -A INPUT -p udp --dport "$PORT" -j ACCEPT
+
+# Create and configure the kernel interface directly. Do NOT pass the full
+# awg-quick config to awg setconf.
 ip link add "$IFACE" type amneziawg
 awg setconf "$IFACE" "$BASE/config/${IFACE}.conf"
 ip address add "$SERVER_IP/24" dev "$IFACE"
 ip link set mtu "$MTU" up dev "$IFACE"
 
-# NAT/FORWARD rules are installed explicitly because this interface is not
-# managed by the broken Docker userspace bridge anymore.
-iptables -C FORWARD -i "$IFACE" -s "$SUBNET" -j ACCEPT 2>/dev/null || iptables -A FORWARD -i "$IFACE" -s "$SUBNET" -j ACCEPT
-iptables -C FORWARD -o "$IFACE" -d "$SUBNET" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || iptables -A FORWARD -o "$IFACE" -d "$SUBNET" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-iptables -t nat -C POSTROUTING -s "$SUBNET" -o "$WAN_IF" -j MASQUERADE 2>/dev/null || iptables -t nat -A POSTROUTING -s "$SUBNET" -o "$WAN_IF" -j MASQUERADE
+# Forward/NAT for the dedicated Keenetic subnet.
+iptables -C FORWARD -i "$IFACE" -s "$SUBNET" -j ACCEPT 2>/dev/null || \
+  iptables -A FORWARD -i "$IFACE" -s "$SUBNET" -j ACCEPT
+iptables -C FORWARD -o "$IFACE" -d "$SUBNET" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || \
+  iptables -A FORWARD -o "$IFACE" -d "$SUBNET" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -t nat -C POSTROUTING -s "$SUBNET" -o "$WAN_IF" -j MASQUERADE 2>/dev/null || \
+  iptables -t nat -A POSTROUTING -s "$SUBNET" -o "$WAN_IF" -j MASQUERADE
 
-# Replace the old systemd unit with a robust service that owns only this interface.
+# Robust systemd service: owns only awg-keenetic and recreates its address/rules.
 cat >"/etc/systemd/system/keenetic-awg2.service" <<EOF
 [Unit]
 Description=NOVA Keenetic-compatible AWG 2.0 bridge
 After=network-online.target
 Wants=network-online.target
-Before=network.target
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/usr/bin/awg-quick up $BASE/config/${IFACE}.conf
-ExecStop=/usr/bin/awg-quick down $BASE/config/${IFACE}.conf
-ExecStartPost=/usr/bin/iptables -C INPUT -p udp --dport $PORT -j ACCEPT
-ExecStartPost=/bin/sh -c '/usr/bin/iptables -C FORWARD -i $IFACE -s $SUBNET -j ACCEPT || /usr/bin/iptables -A FORWARD -i $IFACE -s $SUBNET -j ACCEPT'
-ExecStartPost=/bin/sh -c '/usr/bin/iptables -t nat -C POSTROUTING -s $SUBNET -o $WAN_IF -j MASQUERADE || /usr/bin/iptables -t nat -A POSTROUTING -s $SUBNET -o $WAN_IF -j MASQUERADE'
+ExecStart=/bin/bash -c '/usr/bin/ip link show $IFACE >/dev/null 2>&1 || /usr/bin/ip link add $IFACE type amneziawg; /usr/bin/awg setconf $IFACE $BASE/config/${IFACE}.conf; /usr/bin/ip address show dev $IFACE | /usr/bin/grep -q "${SERVER_IP}/24" || /usr/bin/ip address add ${SERVER_IP}/24 dev $IFACE; /usr/bin/ip link set mtu $MTU up dev $IFACE'
+ExecStartPost=/bin/sh -c '/usr/sbin/iptables -C INPUT -p udp --dport $PORT -j ACCEPT 2>/dev/null || /usr/sbin/iptables -A INPUT -p udp --dport $PORT -j ACCEPT'
+ExecStartPost=/bin/sh -c '/usr/sbin/iptables -C FORWARD -i $IFACE -s $SUBNET -j ACCEPT 2>/dev/null || /usr/sbin/iptables -A FORWARD -i $IFACE -s $SUBNET -j ACCEPT'
+ExecStartPost=/bin/sh -c '/usr/sbin/iptables -C FORWARD -o $IFACE -d $SUBNET -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || /usr/sbin/iptables -A FORWARD -o $IFACE -d $SUBNET -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT'
+ExecStartPost=/bin/sh -c '/usr/sbin/iptables -t nat -C POSTROUTING -s $SUBNET -o $WAN_IF -j MASQUERADE 2>/dev/null || /usr/sbin/iptables -t nat -A POSTROUTING -s $SUBNET -o $WAN_IF -j MASQUERADE'
+ExecStop=/bin/bash -c '/usr/bin/ip link del $IFACE >/dev/null 2>&1 || true'
 
 [Install]
 WantedBy=multi-user.target
@@ -180,7 +184,7 @@ systemctl daemon-reload
 systemctl enable keenetic-awg2.service >/dev/null
 systemctl restart keenetic-awg2.service
 
-# Final checks.
+# Final validation.
 ip link show "$IFACE" >/dev/null
 awg show "$IFACE" >/dev/null
 
@@ -192,12 +196,10 @@ UDP port: $PORT
 Server subnet: $SUBNET
 Client config: $BASE/clients/keenetic-awg2.conf
 
-The bridge uses the VPS's matching AmneziaWG 3.1 userspace/kernel pair with
-only the AWG 2.0-compatible Jc/Jmin/Jmax/S1-S4/H1-H4 profile. No I1-I5 fields
-are used. The existing NOVA AWG 3.1 awg0 interface remains untouched.
-
-KeeneticOS 5.1+ can use the generated config where supported. For selective
-routing, use the NOVA Keenetic route generator and route through this tunnel.
+The server interface uses an AWG-only config for awg setconf. Address, MTU,
+forwarding and NAT are configured separately with iproute2/iptables.
+I1-I5 are intentionally omitted for compatibility.
+The existing NOVA AWG 3.1 awg0 interface remains untouched.
 EOF
 
 printf '\nKeenetic AWG 2.0-compatible bridge installed.\n'
