@@ -1,0 +1,61 @@
+NOVA — KEENETIC FULL-TUNNEL ROUTING
+
+Purpose
+=======
+Send all Internet traffic from selected Keenetic devices through the NOVA AWG 2.0-compatible bridge.
+The primary NOVA AWG 3.1 interface awg0:1234 is not used or changed.
+
+Server bridge
+=============
+Endpoint: VPS_PUBLIC_IP:51820/UDP
+Tunnel: 10.77.0.0/24
+Keenetic: 10.77.0.2/32
+Server: 10.77.0.1
+MTU: 1280
+
+Keenetic peer
+=============
+Allowed IPs: 0.0.0.0/0
+Persistent Keepalive: 15-30 seconds
+DNS: 1.1.1.1 (or another reachable DNS server)
+
+IMPORTANT
+=========
+On Keenetic, Allowed IPs alone does not necessarily select which LAN devices use the tunnel. The WireGuard/AmneziaWG interface must be enabled for Internet access and selected in the appropriate Internet access policy.
+
+Full LAN tunnel
+===============
+1. Open Internet / Connection Policies on Keenetic.
+2. Open the AWG/WireGuard client interface connected to the NOVA bridge.
+3. Enable "Use for accessing the Internet" for this interface.
+4. In the peer settings use Allowed IPs 0.0.0.0/0.
+5. Put this interface at the top of the policy used by the LAN devices that should use the VPN.
+6. For all LAN devices, assign the System/default policy to the VPN-enabled policy.
+7. Save the Keenetic configuration.
+
+Selected devices only
+=====================
+1. Create a separate Internet access policy, for example NOVA-VPN.
+2. Add the AWG/WireGuard interface as the global Internet path in that policy.
+3. Bind only the required LAN devices to NOVA-VPN.
+4. Leave other devices on the normal ISP policy.
+
+Verification on VPS
+===================
+On the VPS run:
+
+awg show awg-keenetic
+iptables -L FORWARD -n -v --line-numbers
+iptables -t nat -L POSTROUTING -n -v --line-numbers
+
+When a selected Keenetic device opens a website, the following counters should increase:
+- FORWARD: awg-keenetic -> WAN
+- POSTROUTING: source 10.77.0.0/24 -> ens3
+
+The peer handshake should also refresh.
+
+If handshake is old and FORWARD remains 0
+==========================================
+The server bridge is not receiving client data. Check the Keenetic Internet access policy and ensure the AWG interface is actually selected for the LAN device.
+
+Do not change the primary NOVA awg0 configuration.
