@@ -10,22 +10,22 @@ python3 - "$FILE" <<'PY'
 from pathlib import Path
 import sys
 p=Path(sys.argv[1]); s=p.read_text()
-old_menu="def menu():return json.dumps({'inline_keyboard':[[{'text':'🔐 Получить VPN','callback_data':'get'}],[{'text':'📱 Мой VPN','callback_data':'my'},{'text':'♻️ Продлить','callback_data':'renew'}],[{'text':'ℹ️ Помощь','callback_data':'help'}]]},ensure_ascii=False)"
-new_menu="""def menu():
- return json.dumps({'inline_keyboard':[[{'text':'🔐 Получить VPN','callback_data':'get'}],[{'text':'📱 Мой VPN','callback_data':'my'},{'text':'♻️ Продлить','callback_data':'renew'}],[{'text':'🛜 Настроить Keenetic','callback_data':'keenetic'}],[{'text':'ℹ️ Помощь','callback_data':'help'}]]},ensure_ascii=False)"""
+
+marker="def menu():"
 if '🛜 Настроить Keenetic' not in s:
- if old_menu not in s: raise SystemExit('Telegram menu marker not found; no changes made')
- s=s.replace(old_menu,new_menu,1)
-old_help="elif data=='help':send(chat,'<b>NOVA VPN Bot</b>\\n\\nПолучить VPN — создаёт AWG 3.1 профиль.\\nМой VPN — показывает срок.\\nПродлить — добавляет срок и восстанавливает доступ после истечения.',True)"
-new_help="""elif data=='keenetic':
-   panel=os.getenv('NOVA_PANEL_URL','').rstrip('/')
-   text='🛜 <b>Настройка Keenetic</b>\\n\\n1. Откройте NOVA → Keenetic.\\n2. На Keenetic создайте/импортируйте WireGuard-подключение.\\n3. Для полного туннеля используйте Allowed IPs: <code>0.0.0.0/0</code>.\\n4. В Keenetic включите использование подключения для доступа в Интернет и назначьте нужные устройства в политике подключения.'
-   if panel:text+='\\n\\n🌐 <a href="'+panel+'/keenetic">Открыть Keenetic в NOVA</a>'
-   send(chat,text,True)
-  elif data=='help':send(chat,'<b>NOVA VPN Bot</b>\\n\\nПолучить VPN — создаёт AWG 3.1 профиль.\\nМой VPN — показывает срок.\\nПродлить — добавляет срок и восстанавливает доступ после истечения.',True)"""
+    start=s.find(marker)
+    if start<0: raise SystemExit('Telegram menu function not found; no changes made')
+    end=s.find('\ndef send(',start)
+    if end<0: raise SystemExit('Telegram menu end marker not found; no changes made')
+    new_menu="""def menu():\n return json.dumps({'inline_keyboard':[[{'text':'🔐 Получить VPN','callback_data':'get'}],[{'text':'📱 Мой VPN','callback_data':'my'},{'text':'♻️ Продлить','callback_data':'renew'}],[{'text':'🛜 Настроить Keenetic','callback_data':'keenetic'}],[{'text':'ℹ️ Помощь','callback_data':'help'}]]},ensure_ascii=False)\n"""
+    s=s[:start]+new_menu+s[end+1:]
+
 if "elif data=='keenetic':" not in s:
- if old_help not in s: raise SystemExit('Telegram help marker not found; no changes made')
- s=s.replace(old_help,new_help,1)
+    help_marker="  elif data=='help':"
+    pos=s.find(help_marker)
+    if pos<0: raise SystemExit('Telegram help handler not found; no changes made')
+    s=s[:pos]+"  elif data=='keenetic':\n   panel=os.getenv('NOVA_PANEL_URL','').rstrip('/')\n   text='🛜 <b>Настройка Keenetic</b>\\n\\n1. Откройте NOVA → Keenetic.\\n2. На Keenetic создайте/импортируйте WireGuard-подключение.\\n3. Для полного туннеля используйте Allowed IPs: <code>0.0.0.0/0</code>.\\n4. В Keenetic включите использование подключения для доступа в Интернет и назначьте нужные устройства в политике подключения.'\n   if panel:text+='\\n\\n🌐 <a href=\"'+panel+'/keenetic\">Открыть Keenetic в NOVA</a>'\n   send(chat,text,True)\n"+s[pos:]
+
 p.write_text(s)
 PY
 python3 -m py_compile "$FILE"
