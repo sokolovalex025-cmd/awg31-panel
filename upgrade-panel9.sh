@@ -50,8 +50,9 @@ install -m 644 "$SRC/keenetic.py" "$BASE/keenetic.py.new"
 install -m 644 "$SRC/balancer.py" "$BASE/balancer.py.new"
 "$PY" -m py_compile "$BASE/app.py.new" "$BASE/app9.py.new" "$BASE/keenetic.py.new" "$BASE/balancer.py.new"
 
-# Validate staged modules. SourceFileLoader is used explicitly because the
-# staged files end in .new and therefore importlib cannot infer a Python loader.
+# Validate staged modules. Load the source files by path so the temporary .new
+# suffix never affects import semantics. Also register the temporary app module
+# before executing app.py because app.py expects sys.modules['app'] to exist.
 "$PY" - "$BASE/app.py.new" "$BASE/app9.py.new" "$BASE/keenetic.py.new" "$BASE/balancer.py.new" <<'PY'
 from pathlib import Path
 import sys, types
@@ -71,21 +72,26 @@ def load_module(name, path):
     spec.loader.exec_module(mod)
     return mod
 
+# app.py references sys.modules[__name__] while it is executing, so create
+# and register its module object first and then execute its source into it.
+app_mod = types.ModuleType('app')
+app_mod.__file__ = str(app_path)
+app_mod.__package__ = ''
+sys.modules['app'] = app_mod
+app_code = compile(app_path.read_text(encoding='utf-8'), str(app_path), 'exec')
+exec(app_code, app_mod.__dict__)
+core = app_mod.__dict__.get('app')
+assert core is not None, 'Flask app object missing from app.py'
+
 load_module('keenetic', keenetic_path)
 load_module('balancer', balancer_path)
 
-spec_globals={"__name__":"nova_app_check","__file__":str(app_path)}
-code=compile(app_path.read_text(encoding='utf-8'),str(app_path),'exec')
-exec(code,spec_globals)
-core=spec_globals.get('app')
-assert core is not None, 'Flask app object missing from app.py'
-
-mod=types.ModuleType('app')
-mod.__dict__.update(spec_globals)
-sys.modules['app']=mod
-spec9_globals={"__name__":"nova_app9_check","__file__":str(app9_path)}
-code9=compile(app9_path.read_text(encoding='utf-8'),str(app9_path),'exec')
-exec(code9,spec9_globals)
+app9_mod = types.ModuleType('app9')
+app9_mod.__file__ = str(app9_path)
+app9_mod.__package__ = ''
+sys.modules['app9'] = app9_mod
+app9_code = compile(app9_path.read_text(encoding='utf-8'), str(app9_path), 'exec')
+exec(app9_code, app9_mod.__dict__)
 print('NOVA import check: OK')
 PY
 
