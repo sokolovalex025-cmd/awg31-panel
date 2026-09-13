@@ -1,79 +1,78 @@
-#!/usr/bin/env python3
-"""KeeneticOS 5.x helper for NOVA."""
-import ipaddress, socket, time
 from flask import request, Response, redirect
+import ipaddress
+import socket
+import subprocess
+import re
 
 SERVICES = {
-    'youtube': ('YouTube', ['youtube.com','googlevideo.com','ytimg.com','youtu.be']),
-    'telegram': ('Telegram', ['telegram.org','t.me']),
-    'discord': ('Discord', ['discord.com','discordapp.com','discord.gg']),
-    'instagram': ('Instagram', ['instagram.com','cdninstagram.com']),
-    'facebook': ('Facebook', ['facebook.com','fbcdn.net','fb.com']),
-    'whatsapp': ('WhatsApp', ['whatsapp.com','whatsapp.net']),
-    'x': ('X / Twitter', ['x.com','twitter.com','twimg.com']),
-    'tiktok': ('TikTok', ['tiktok.com','tiktokcdn.com','tiktokv.com']),
-    'chatgpt': ('ChatGPT / OpenAI', ['chatgpt.com','openai.com','oaistatic.com']),
+    'youtube': ['YouTube'],
+    'telegram': ['Telegram'],
+    'discord': ['Discord'],
+    'instagram': ['Instagram'],
+    'facebook': ['Facebook'],
+    'whatsapp': ['WhatsApp'],
+    'x': ['X / Twitter'],
+    'tiktok': ['TikTok'],
+    'chatgpt': ['ChatGPT / OpenAI'],
 }
 
 
-def _resolve_ipv4(domains):
-    ips=set()
-    for domain in domains:
-        try:
-            for item in socket.getaddrinfo(domain, 443, socket.AF_INET, socket.SOCK_STREAM):
-                ips.add(item[4][0])
-        except Exception:
-            continue
-    return sorted(ips, key=lambda x: tuple(map(int,x.split('.'))))
-
-
-def _aggregate(ips, prefix=24, limit=1024):
-    nets=[ipaddress.ip_network(f'{ip}/{prefix}', strict=False) for ip in ips]
-    return list(ipaddress.collapse_addresses(nets))[:limit]
-
-
 def register(core):
-    @core.app.route('/keenetic')
-    def keenetic_page():
-        rows=core.rows()
-        body=core.render_template_string('''<div class="hero"><div><div class="eyebrow">KEENETIC OS 5.x</div><h1>Keenetic Toolkit</h1><p>Генерация маршрутов и отдельного AWG 2.0 профиля для Keenetic.</p></div><span class="tag">AWG 2.0 · IPv4 · CIDR · .bat</span></div>
-<div class="notice good"><b>Готовая схема</b><br>Ваш NOVA AWG 3.1 остаётся на 1234/UDP. Для Keenetic используется отдельный изолированный AWG 2.0 userspace endpoint на другом UDP-порту. KeeneticOS 5.1+ поддерживает AWG 1.5/2.0, а AWG 3.1 нативно не импортируется.</div>
-<div class="card"><h2>AWG 2.0 для Keenetic</h2><p class="muted">Установщик создаёт отдельный Docker-контейнер <b>keenetic-awg2</b>, не меняя ваш <b>awg0</b> / AWG 3.1. После установки готовый файл <b>keenetic-awg2.conf</b> можно импортировать в KeeneticOS 5.1+.</p><a class="button" href="/keenetic/awg2-installer.sh">⬇ Скачать установщик AWG 2.0</a><div class="subline" style="margin-top:10px">По умолчанию порт 51820/UDP. Если он занят, перед запуском задайте KEENETIC_AWG2_PORT.</div></div>
-<div class="card"><form method="post" action="/keenetic/routes"><div class="toolbar"><h2>Маршруты</h2><span class="muted">До 1024 IPv4 route lines на файл</span></div><div class="formgrid">{% for key,(title,domains) in services.items() %}<label style="display:flex;gap:9px;align-items:center;padding:10px;border:1px solid #202c3b;border-radius:10px;background:#101925"><input type="checkbox" name="service" value="{{key}}" style="width:auto"><span><b>{{title}}</b><small class="subline">{{domains|join(', ')}}</small></span></label>{% endfor %}</div><div class="formgrid" style="margin-top:14px"><div><label>Агрегация IPv4</label><select name="prefix"><option value="32">/32 — точнее, больше маршрутов</option><option value="24" selected>/24 — баланс</option><option value="23">/23 — меньше маршрутов</option></select></div><div><label>Клиент</label><select name="client_id"><option value="">Не требуется для .bat</option>{% for r in rows %}<option value="{{r.id}}">{{r.name}} — {{r.address}}</option>{% endfor %}</select></div></div><button style="margin-top:14px">⬇ Скачать маршруты Keenetic</button></form></div>''',services=SERVICES,rows=rows())
-        return core.layout('Keenetic',body,'/keenetic')
+    app = core.app
 
-    @core.app.route('/keenetic/awg2-installer.sh')
-    def keenetic_awg2_installer():
-        # Keep the installer in GitHub so it is always identical to the panel release.
+    @app.route('/keenetic')
+    def keenetic_page():
+        if not core.session.get('logged'):
+            return redirect('/login')
+        return Response('''<!doctype html><html><head><meta charset="utf-8"><title>NOVA — Keenetic</title>
+<style>body{font-family:Inter,Arial;background:#0b1020;color:#e8edf7;margin:0;padding:32px} .box{max-width:900px;margin:auto;background:#11182b;border:1px solid #26314d;border-radius:18px;padding:28px}h1{margin-top:0}.muted{color:#94a3b8}.btn{display:inline-block;padding:12px 16px;border-radius:10px;background:#2563eb;color:white;text-decoration:none;margin:8px 8px 8px 0}.card{background:#0c1427;border:1px solid #26314d;border-radius:14px;padding:18px;margin:16px 0}code{background:#0a0f1d;padding:3px 6px;border-radius:6px}</style></head><body><div class="box">
+<h1>🛜 Keenetic AWG</h1><p class="muted">Профиль для KeeneticOS 5.1+ через отдельный AWG 2.0-compatible интерфейс.</p>
+<div class="card"><b>Важно</b><p>Основной NOVA AWG 3.1 <code>awg0:1234/UDP</code> не изменяется. Для Keenetic используется отдельный интерфейс <code>awg-keenetic:51820/UDP</code>.</p></div>
+<div class="card"><h3>Установка на VPS</h3><p>Скрипт установки поднимает отдельный туннель и создаёт готовый клиентский конфиг.</p><a class="btn" href="/keenetic/awg2-installer.sh">Скачать установщик AWG 2.0</a></div>
+<div class="card"><h3>Готовый конфиг</h3><p>После установки конфиг создаётся как <code>/opt/keenetic-awg2/clients/keenetic-awg2.conf</code>.</p><p>Не публикуйте этот файл: в нём находится приватный ключ клиента.</p></div>
+<div class="card"><h3>Выборочная маршрутизация</h3><p>Генерируйте IPv4 route-файл для выбранного сервиса и импортируйте его в KeeneticOS. Это позволяет направлять только нужные IP через VPN.</p><form method="post" action="/keenetic/routes"><select name="service">''' + ''.join(f'<option value="{k}">{v[0]}</option>' for k,v in SERVICES.items()) + '''</select> <button class="btn" type="submit">Скачать BAT routes</button></form></div>
+</div></body></html>''', mimetype='text/html')
+
+    @app.route('/keenetic/awg2-installer.sh')
+    def keenetic_installer():
+        if not core.session.get('logged'):
+            return redirect('/login')
+        # Keep a direct panel link while allowing the installer to remain versioned in GitHub.
         return redirect('https://raw.githubusercontent.com/sokolovalex025-cmd/awg31-panel/main/keenetic-awg2.sh')
 
-    @core.app.route('/keenetic/routes', methods=['POST'])
+    @app.route('/keenetic/routes', methods=['POST'])
     def keenetic_routes():
-        selected=request.form.getlist('service')
-        try: prefix=int(request.form.get('prefix','24'))
-        except Exception: prefix=24
-        if prefix not in (32,24,23): prefix=24
-        domains=[]; titles=[]
-        for key in selected:
-            if key in SERVICES:
-                titles.append(SERVICES[key][0]); domains.extend(SERVICES[key][1])
-        if not domains:
-            return 'Выберите хотя бы один сервис.',400
-        ips=_resolve_ipv4(sorted(set(domains)))
-        nets=_aggregate(ips,prefix,1024)
-        if not nets:
-            return 'Не удалось получить IPv4-адреса выбранных сервисов с сервера.',502
-        lines=['@echo off',f'REM NOVA Keenetic routes - {time.strftime("%Y-%m-%d %H:%M:%S")}',f'REM Services: {", ".join(titles)}',f'REM Aggregation: /{prefix}',f'REM Routes: {len(nets)} / 1024 maximum','']
-        for net in nets:
+        if not core.session.get('logged'):
+            return redirect('/login')
+        service = request.form.get('service', 'youtube')
+        if service not in SERVICES:
+            return Response('Unknown service', status=400)
+        targets = {
+            'youtube': ['142.250.0.0/15','142.251.0.0/16','172.217.0.0/16','216.58.192.0/19'],
+            'telegram': ['91.108.0.0/16','149.154.160.0/20'],
+            'discord': ['66.22.0.0/16','162.158.0.0/15'],
+            'instagram': ['31.13.24.0/21','157.240.0.0/16'],
+            'facebook': ['31.13.64.0/18','157.240.0.0/16'],
+            'whatsapp': ['31.13.64.0/18','157.240.0.0/16'],
+            'x': ['104.244.40.0/21','192.133.76.0/22'],
+            'tiktok': ['23.227.0.0/16','161.117.0.0/16'],
+            'chatgpt': ['104.18.0.0/15','172.64.0.0/13'],
+        }
+        lines = ['@echo off', 'REM NOVA Keenetic selective routes', 'REM Generated from NOVA panel', '']
+        for cidr in targets[service]:
+            net = ipaddress.ip_network(cidr, strict=False)
             lines.append(f'route ADD {net.network_address} MASK {net.netmask} 0.0.0.0')
-        lines += ['', 'REM Upload this BAT in Keenetic: Network rules -> Routing -> IPv4 routes -> Upload.', 'REM Select the AWG 2.0 WireGuard VPN interface when importing.']
-        data='\r\n'.join(lines)+'\r\n'
-        return Response(data.encode(),mimetype='application/octet-stream',headers={'Content-Disposition':'attachment; filename=keenetic-routes.bat'})
+        lines += ['', 'REM Import/use these IPv4 routes with the Keenetic AWG interface.', '']
+        return Response('\r\n'.join(lines), mimetype='application/octet-stream', headers={'Content-Disposition': f'attachment; filename="nova-{service}-routes.bat"'})
 
-    old_nav=core.nav
-    def nav_with_keenetic(path):
-        s=old_nav(path)
-        marker='<div class="section">СИСТЕМА</div>'
-        link='<div class="section">ROUTING</div><a class="active" href="/keenetic">▣Keenetic</a>' if path=='/keenetic' else '<div class="section">ROUTING</div><a href="/keenetic">▣Keenetic</a>'
-        return s.replace(marker,link+marker)
-    core.nav=nav_with_keenetic
+    @app.route('/api/keenetic/status')
+    def keenetic_status():
+        if not core.session.get('logged'):
+            return core.jsonify({'error':'auth required'}), 401
+        iface = 'awg-keenetic'
+        try:
+            show = subprocess.run(['awg','show',iface], capture_output=True, text=True, timeout=3)
+            exists = subprocess.run(['ip','link','show',iface], capture_output=True, text=True, timeout=3).returncode == 0
+            return core.jsonify({'interface':iface,'exists':exists,'awg_ok':show.returncode == 0,'details':show.stdout})
+        except Exception as e:
+            return core.jsonify({'interface':iface,'exists':False,'awg_ok':False,'error':str(e)})
