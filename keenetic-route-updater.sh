@@ -31,12 +31,11 @@ trap 'rm -f "$LOCK"' EXIT INT TERM
 
 TMP="${STATE}.new"
 OLD="${STATE}.old"
-trap 'rm -f "$TMP" "$OLD"' EXIT INT TERM
+VALID="${STATE}.valid"
+trap 'rm -f "$TMP" "$OLD" "$VALID"' EXIT INT TERM
 
 # Feed is intentionally plain text: one IPv4 CIDR per line. Ignore comments/blank lines.
 $FETCH "$FEED_URL" > "$TMP"
-
-VALID="${TMP}.valid"
 awk '
     /^[[:space:]]*#/ || /^[[:space:]]*$/ { next }
     { gsub(/[[:space:]]/, "", $0); print }
@@ -65,23 +64,37 @@ done | sort -u > "$VALID"
 touch "$STATE"
 cp "$STATE" "$OLD"
 
+# Convert CIDR to network + dotted mask for Keenetic's policy route CLI.
+route_parts() {
+    awk -v cidr="$1" 'BEGIN {
+        split(cidr,a,"/"); ip=a[1]; p=a[2];
+        split(ip,o,"."); mask="";
+        for(i=0;i<4;i++) {
+            n=0; left=p-i*8;
+            if(left>=8) n=255; else if(left<=0) n=0; else n=256-2^(8-left);
+            mask=mask (i?".":"") n;
+        }
+        print o[1] "." o[2] "." o[3] "." o[4], mask
+    }'
+}
+
 # Remove routes that disappeared from the VPS feed.
 while IFS= read -r route; do
     [ -n "$route" ] || continue
     if ! grep -Fxq "$route" "$VALID"; then
-        network="${route%/*}"; prefix="${route#*/}"
-        # Keenetic CLI accepts prefix notation for policy-specific routes.
-        ndmc -c "no ip policy $POLICY route $network/$prefix $IFACE" >/dev/null 2>&1 || true
+        set -- $(route_parts "$route")
+        network="$1"; mask="$2"
+        ndmc -c "no ip policy $POLICY route $network $mask $IFACE" >/dev/null 2>&1 || true
     fi
 done < "$OLD"
 
-# Add current routes. Re-adding existing routes is harmless, but skip known state
-# to reduce CLI traffic.
+# Add current routes that were not present in the previous NOVA state.
 while IFS= read -r route; do
     [ -n "$route" ] || continue
     if ! grep -Fxq "$route" "$OLD"; then
-        network="${route%/*}"; prefix="${route#*/}"
-        if ! ndmc -c "ip policy $POLICY route $network/$prefix $IFACE auto" >/dev/null 2>&1; then
+        set -- $(route_parts "$route")
+        network="$1"; mask="$2"
+        if ! ndmc -c "ip policy $POLICY route $network $mask $IFACE auto" >/dev/null 2>&1; then
             echo "Failed to add route $route to policy $POLICY via $IFACE" >&2
             exit 1
         fi
