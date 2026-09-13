@@ -10,7 +10,7 @@ if [ -r /etc/os-release ]; then . /etc/os-release; else echo 'Unsupported Linux:
 case "${ID:-}" in ubuntu|debian) ;; *) echo "NOVA MAX installer supports Debian/Ubuntu. Detected: ${ID:-unknown}"; exit 2;; esac
 
 apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get install -y git python3 python3-venv python3-pip curl qrencode iptables nginx dnsutils iproute2 iputils-ping
+DEBIAN_FRONTEND=noninteractive apt-get install -y git python3 python3-venv python3-pip curl qrencode iptables nginx dnsutils iproute2 iputils-ping openssl
 
 if ! command -v awg >/dev/null 2>&1; then
   cat >&2 <<'EOF'
@@ -47,10 +47,10 @@ python3 -m venv "$REPO_DIR/venv"
 "$REPO_DIR/venv/bin/pip" install --upgrade pip
 "$REPO_DIR/venv/bin/pip" install Flask 'qrcode[pil]'
 
-for f in app.py nova11.py panel_bootstrap.py nova12_theme.py nova13_theme.py nova14_theme.py antiblock.py nova_shield.py nova_resilience.py domain_manager.py telegram_ui.py telegram_bot.py telegram_runner.py telegram_delete.py keenetic.py balancer.py balancer_provision.py keenetic-routing-guide.txt background.svg nova-network-fix.sh nova_mobile_diagnostics.py nova-max-backup.sh; do
+for f in app.py nova11.py panel_bootstrap.py nova12_theme.py nova13_theme.py nova14_theme.py antiblock.py nova_shield.py nova_resilience.py domain_manager.py telegram_ui.py telegram_bot.py telegram_runner.py telegram_delete.py keenetic.py balancer.py balancer_provision.py keenetic-routing-guide.txt background.svg nova-network-fix.sh nova_mobile_diagnostics.py nova-max-backup.sh nova-migrate.sh; do
   [ -f "$REPO_DIR/$f" ] && install -m 644 "$REPO_DIR/$f" "$BASE/$f"
 done
-chmod 755 "$BASE/nova11.py" "$BASE/panel_bootstrap.py" "$BASE/telegram_bot.py" "$BASE/telegram_runner.py" "$BASE/telegram_delete.py" "$BASE/nova-network-fix.sh" "$BASE/antiblock.py" "$BASE/nova_shield.py" "$BASE/nova_resilience.py" "$BASE/nova-max-backup.sh"
+chmod 755 "$BASE/nova11.py" "$BASE/panel_bootstrap.py" "$BASE/telegram_bot.py" "$BASE/telegram_runner.py" "$BASE/telegram_delete.py" "$BASE/nova-network-fix.sh" "$BASE/antiblock.py" "$BASE/nova_shield.py" "$BASE/nova_resilience.py" "$BASE/nova-max-backup.sh" "$BASE/nova-migrate.sh"
 
 SECRET_DIR=/etc/awg31-panel; SECRET_FILE="$SECRET_DIR/panel-secret"; mkdir -p "$SECRET_DIR"; chmod 700 "$SECRET_DIR"
 if [ ! -s "$SECRET_FILE" ]; then umask 077; "$REPO_DIR/venv/bin/python" -c 'import secrets;print(secrets.token_hex(32))' > "$SECRET_FILE"; fi
@@ -134,4 +134,5 @@ printf 'Keenetic:    /keenetic\n'
 printf 'Domains:     /domains\n'
 printf 'Health API:  /api/nova/health\n'
 printf 'Backup:      %s/nova-max-backup.sh\n' "$BASE"
+printf 'Migration:   %s/nova-migrate.sh\n' "$BASE"
 printf 'AWG0:        existing interface preserved\n'
