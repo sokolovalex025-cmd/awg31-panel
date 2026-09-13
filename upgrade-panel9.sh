@@ -50,22 +50,25 @@ install -m 644 "$SRC/keenetic.py" "$BASE/keenetic.py.new"
 install -m 644 "$SRC/balancer.py" "$BASE/balancer.py.new"
 "$PY" -m py_compile "$BASE/app.py.new" "$BASE/app9.py.new" "$BASE/keenetic.py.new" "$BASE/balancer.py.new"
 
-# Validate staged modules. load_dynamic is used because some modules are not
-# standard import targets; a missing loader is now treated as a hard failure.
+# Validate staged modules. SourceFileLoader is used explicitly because the
+# staged files end in .new and therefore importlib cannot infer a Python loader.
 "$PY" - "$BASE/app.py.new" "$BASE/app9.py.new" "$BASE/keenetic.py.new" "$BASE/balancer.py.new" <<'PY'
 from pathlib import Path
-import sys, types, importlib.util
+import sys, types
+from importlib.machinery import SourceFileLoader
+import importlib.util
 
 app_path, app9_path, keenetic_path, balancer_path = map(Path, sys.argv[1:])
 sys.path.insert(0, str(app_path.parent))
 
 def load_module(name, path):
-    spec = importlib.util.spec_from_file_location(name, path)
+    loader = SourceFileLoader(name, str(path))
+    spec = importlib.util.spec_from_loader(name, loader)
     if spec is None or spec.loader is None:
         raise RuntimeError(f'Cannot create import spec for {path}')
     mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
     sys.modules[name] = mod
+    spec.loader.exec_module(mod)
     return mod
 
 load_module('keenetic', keenetic_path)
