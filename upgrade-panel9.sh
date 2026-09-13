@@ -14,10 +14,11 @@ SERVICE=/etc/systemd/system/awgpanel.service
 [ -f "$SRC/app.py" ] || { echo 'app.py не найден.'; exit 1; }
 [ -f "$SRC/app9.py" ] || { echo 'app9.py не найден.'; exit 1; }
 [ -f "$SRC/keenetic.py" ] || { echo 'keenetic.py не найден.'; exit 1; }
+[ -f "$SRC/balancer.py" ] || { echo 'balancer.py не найден.'; exit 1; }
 [ -x "$PY" ] || { echo "Python venv не найден: $PY"; exit 1; }
 
 mkdir -p "$BACKUP"
-for f in app.py app9.py keenetic.py; do
+for f in app.py app9.py keenetic.py balancer.py; do
   [ -f "$BASE/$f" ] && cp -a "$BASE/$f" "$BACKUP/$f-before-nova-$TS"
 done
 [ -f "$CONF" ] && cp -a "$CONF" "$BACKUP/awg0-before-nova-$TS.conf"
@@ -29,11 +30,12 @@ rollback() {
   rolled_back=1
   echo
   echo '!!! NOVA update failed — rolling back.'
-  for f in app.py app9.py keenetic.py; do
+  for f in app.py app9.py keenetic.py balancer.py; do
     [ -f "$BACKUP/$f-before-nova-$TS" ] && cp -a "$BACKUP/$f-before-nova-$TS" "$BASE/$f"
   done
   [ -f "$BACKUP/awgpanel-before-nova-$TS.service" ] && cp -a "$BACKUP/awgpanel-before-nova-$TS.service" "$SERVICE"
   [ -f "$BACKUP/awg0-before-nova-$TS.conf" ] && cp -a "$BACKUP/awg0-before-nova-$TS.conf" "$CONF"
+  rm -f "$BASE/app.py.new" "$BASE/app9.py.new" "$BASE/keenetic.py.new" "$BASE/balancer.py.new"
   systemctl daemon-reload || true
   systemctl restart awg-quick@awg0 || true
   systemctl restart awgpanel || true
@@ -45,21 +47,26 @@ trap rollback ERR
 install -m 600 "$SRC/app.py" "$BASE/app.py.new"
 install -m 755 "$SRC/app9.py" "$BASE/app9.py.new"
 install -m 644 "$SRC/keenetic.py" "$BASE/keenetic.py.new"
-"$PY" -m py_compile "$BASE/app.py.new" "$BASE/app9.py.new" "$BASE/keenetic.py.new"
+install -m 644 "$SRC/balancer.py" "$BASE/balancer.py.new"
+"$PY" -m py_compile "$BASE/app.py.new" "$BASE/app9.py.new" "$BASE/keenetic.py.new" "$BASE/balancer.py.new"
 
-# Import both modules safely. Do not execute the Flask dev server.
-"$PY" - "$BASE/app.py.new" "$BASE/app9.py.new" "$BASE/keenetic.py.new" <<'PY'
+# Validate every staged Python module without starting the Flask dev server.
+"$PY" - "$BASE/app.py.new" "$BASE/app9.py.new" "$BASE/keenetic.py.new" "$BASE/balancer.py.new" <<'PY'
 from pathlib import Path
-import sys, types
+import sys, types, importlib.util
 
-app_path, app9_path, keenetic_path = map(Path, sys.argv[1:])
-sys.path.insert(0, str(keenetic_path.parent))
-# The staged module has a .new suffix, so make it importable under the expected name.
-import importlib.util
+app_path, app9_path, keenetic_path, balancer_path = map(Path, sys.argv[1:])
+sys.path.insert(0, str(app_path.parent))
+
 kspec=importlib.util.spec_from_file_location('keenetic', keenetic_path)
 kmod=importlib.util.module_from_spec(kspec)
 kspec.loader.exec_module(kmod)
 sys.modules['keenetic']=kmod
+
+bspec=importlib.util.spec_from_file_location('balancer', balancer_path)
+bmod=importlib.util.module_from_spec(bspec)
+bspec.loader.exec_module(bmod)
+sys.modules['balancer']=bmod
 
 spec_globals={"__name__":"nova_app_check","__file__":str(app_path)}
 code=compile(app_path.read_text(encoding='utf-8'),str(app_path),'exec')
@@ -79,10 +86,13 @@ PY
 mv -f "$BASE/app.py.new" "$BASE/app.py"
 mv -f "$BASE/app9.py.new" "$BASE/app9.py"
 mv -f "$BASE/keenetic.py.new" "$BASE/keenetic.py"
+mv -f "$BASE/balancer.py.new" "$BASE/balancer.py"
 chmod 600 "$BASE/app.py"
 chmod 755 "$BASE/app9.py"
-chmod 644 "$BASE/keenetic.py"
+chmod 644 "$BASE/keenetic.py" "$BASE/balancer.py"
 
+# Preserve the existing NOVA AWG 3.1 profile. These are the known Strong Mobile values.
+# The dedicated Keenetic bridge uses a separate interface/config and is not modified here.
 if [ -f "$CONF" ]; then
   "$PY" - "$CONF" <<'PY'
 from pathlib import Path
@@ -155,7 +165,7 @@ sleep 2
 systemctl is-active --quiet awgpanel
 curl -fsS --max-time 5 http://127.0.0.1:8080/login >/dev/null
 
-"$PY" - "$BASE/app.py" "$BASE/app9.py" "$BASE/keenetic.py" <<'PY'
+"$PY" - "$BASE/app.py" "$BASE/app9.py" "$BASE/keenetic.py" "$BASE/balancer.py" <<'PY'
 from pathlib import Path
 import sys
 for p in map(Path,sys.argv[1:]):
@@ -171,4 +181,6 @@ trap - ERR
 printf '\nNOVA Network Control Center обновлён и прошёл live health-check.\n'
 printf 'AmneziaWG 3.1: 1234/UDP\n'
 printf 'Branding: NOVA\n'
-printf 'Keenetic toolkit: IPv4 route .bat generator\n'
+printf 'Keenetic toolkit: AWG 2.0-compatible bridge + diagnostics\n'
+printf 'Balancer module: deployed\n'
+printf 'Primary awg0: preserved\n'
