@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runtime bootstrap for a clean NOVA installation."""
+"""Runtime bootstrap for the NOVA command-center panel."""
 from pathlib import Path
 import sqlite3
 
@@ -17,6 +17,6 @@ con.execute("INSERT OR IGNORE INTO settings(k,v) VALUES('dns','10.66.66.1')")
 con.commit(); con.close()
 
 import nova11
-import nova12_theme
-nova12_theme.apply(nova11)
+import nova13_theme
+nova13_theme.apply(nova11)
 nova11.core.app.run(host='0.0.0.0',port=8080)
