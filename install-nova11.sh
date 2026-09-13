@@ -9,7 +9,7 @@ TG_SERVICE="/etc/systemd/system/awgpanel-telegram.service"
 NET_SERVICE="/etc/systemd/system/awg31-network.service"
 command -v awg >/dev/null 2>&1 || { echo 'AmneziaWG tool "awg" was not found.'; exit 2; }
 apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get install -y git python3 python3-venv python3-pip curl qrencode iptables
+DEBIAN_FRONTEND=noninteractive apt-get install -y git python3 python3-venv python3-pip curl qrencode iptables nginx
 if [ -d "$REPO_DIR/.git" ]; then
   git -C "$REPO_DIR" fetch origin main
   git -C "$REPO_DIR" reset --hard origin/main
@@ -79,6 +79,29 @@ NoNewPrivileges=false
 [Install]
 WantedBy=multi-user.target
 EOF
+cat > /etc/nginx/sites-available/awg31-panel <<'EOF'
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+    client_max_body_size 20m;
+    proxy_read_timeout 120s;
+    proxy_send_timeout 120s;
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+EOF
+ln -sfn /etc/nginx/sites-available/awg31-panel /etc/nginx/sites-enabled/awg31-panel
+rm -f /etc/nginx/sites-enabled/default
+nginx -t
 "$REPO_DIR/venv/bin/python" -m py_compile "$BASE/app.py" "$BASE/nova11.py" "$BASE/panel_bootstrap.py" "$BASE/telegram_ui.py" "$BASE/telegram_bot.py" "$BASE/telegram_runner.py" "$BASE/telegram_delete.py" "$BASE/keenetic.py" "$BASE/balancer.py" "$BASE/nova_mobile_diagnostics.py" "$BASE/nova14_theme.py"
 systemctl daemon-reload
 systemctl enable awg31-network >/dev/null
@@ -91,6 +114,9 @@ systemctl is-active --quiet awgpanel
 curl -fsS --max-time 5 http://127.0.0.1:8080/login >/dev/null
 systemctl enable awgpanel-telegram >/dev/null
 systemctl restart awgpanel-telegram || true
+systemctl enable nginx >/dev/null
+systemctl restart nginx
+systemctl is-active --quiet nginx
 printf '\nNOVA 11 installed successfully.\n'
 printf 'Panel: active (awgpanel)\n'
 printf 'Telegram: runtime installed (awgpanel-telegram)\n'
@@ -98,6 +124,7 @@ printf 'Network: persistent AWG client NAT + IPv4 forwarding\n'
 printf 'Client DNS: 1.1.1.1,8.8.8.8 (old 10.66.66.1 default migrated)\n'
 printf 'Mobile diagnostics: /mobile-diagnostics and /api/mobile-diagnostics\n'
 printf 'Sidebar: NOVA14 scrollbar + status card flow fix\n'
+printf 'Nginx: reverse proxy :80 -> 127.0.0.1:8080\n'
 printf 'AWG interface/config: preserved\n'
 printf 'Keenetic: native NOVA menu + /keenetic\n'
 printf 'Health: /api/nova/health\n'
