@@ -1,12 +1,7 @@
 #!/usr/bin/env python3
-"""KeeneticOS 5.x helper for NOVA.
-
-Generates Keenetic-compatible IPv4 route .bat files and exposes the isolated
-AWG 2.0 bridge installer. The existing NOVA AWG 3.1 endpoint remains separate.
-"""
+"""KeeneticOS 5.x helper for NOVA."""
 import ipaddress, socket, time
-from pathlib import Path
-from flask import request, Response, send_file
+from flask import request, Response, redirect
 
 SERVICES = {
     'youtube': ('YouTube', ['youtube.com','googlevideo.com','ytimg.com','youtu.be']),
@@ -42,19 +37,15 @@ def register(core):
     def keenetic_page():
         rows=core.rows()
         body=core.render_template_string('''<div class="hero"><div><div class="eyebrow">KEENETIC OS 5.x</div><h1>Keenetic Toolkit</h1><p>Генерация маршрутов и отдельного AWG 2.0 профиля для Keenetic.</p></div><span class="tag">AWG 2.0 · IPv4 · CIDR · .bat</span></div>
-<div class="notice good"><b>Готовая схема</b><br>Ваш NOVA AWG 3.1 остаётся на 1234/UDP. Для Keenetic используется отдельный изолированный AWG 2.0 userspace endpoint на другом UDP-порту. Это соответствует текущей документации Amnezia: KeeneticOS 5.1+ поддерживает AWG 1.5/2.0, а AWG 3.1 нативно не импортируется.</div>
-<div class="card"><h2>AWG 2.0 для Keenetic</h2><p class="muted">Установщик создаёт отдельный Docker-контейнер <b>keenetic-awg2</b>, не меняя ваш <b>awg0</b> / AWG 3.1. После установки готовый файл <b>keenetic-awg2.conf</b> можно импортировать в KeeneticOS 5.1+.</p><a class="button" href="/keenetic/awg2-installer.sh">⬇ Скачать установщик AWG 2.0</a><div class="subline" style="margin-top:10px">По умолчанию порт 51820/UDP. Если он занят, перед запуском установщика задайте KEENETIC_AWG2_PORT.</div></div>
+<div class="notice good"><b>Готовая схема</b><br>Ваш NOVA AWG 3.1 остаётся на 1234/UDP. Для Keenetic используется отдельный изолированный AWG 2.0 userspace endpoint на другом UDP-порту. KeeneticOS 5.1+ поддерживает AWG 1.5/2.0, а AWG 3.1 нативно не импортируется.</div>
+<div class="card"><h2>AWG 2.0 для Keenetic</h2><p class="muted">Установщик создаёт отдельный Docker-контейнер <b>keenetic-awg2</b>, не меняя ваш <b>awg0</b> / AWG 3.1. После установки готовый файл <b>keenetic-awg2.conf</b> можно импортировать в KeeneticOS 5.1+.</p><a class="button" href="/keenetic/awg2-installer.sh">⬇ Скачать установщик AWG 2.0</a><div class="subline" style="margin-top:10px">По умолчанию порт 51820/UDP. Если он занят, перед запуском задайте KEENETIC_AWG2_PORT.</div></div>
 <div class="card"><form method="post" action="/keenetic/routes"><div class="toolbar"><h2>Маршруты</h2><span class="muted">До 1024 IPv4 route lines на файл</span></div><div class="formgrid">{% for key,(title,domains) in services.items() %}<label style="display:flex;gap:9px;align-items:center;padding:10px;border:1px solid #202c3b;border-radius:10px;background:#101925"><input type="checkbox" name="service" value="{{key}}" style="width:auto"><span><b>{{title}}</b><small class="subline">{{domains|join(', ')}}</small></span></label>{% endfor %}</div><div class="formgrid" style="margin-top:14px"><div><label>Агрегация IPv4</label><select name="prefix"><option value="32">/32 — точнее, больше маршрутов</option><option value="24" selected>/24 — баланс</option><option value="23">/23 — меньше маршрутов</option></select></div><div><label>Клиент</label><select name="client_id"><option value="">Не требуется для .bat</option>{% for r in rows %}<option value="{{r.id}}">{{r.name}} — {{r.address}}</option>{% endfor %}</select></div></div><button style="margin-top:14px">⬇ Скачать маршруты Keenetic</button></form></div>''',services=SERVICES,rows=rows())
         return core.layout('Keenetic',body,'/keenetic')
 
     @core.app.route('/keenetic/awg2-installer.sh')
     def keenetic_awg2_installer():
-        p=Path(core.BASE).parent / 'keenetic-awg2.sh'
-        if not p.exists():
-            p=Path(__file__).with_name('keenetic-awg2.sh')
-        if not p.exists():
-            return 'AWG 2.0 installer is not installed on the panel server.',404
-        return send_file(p, mimetype='text/plain', as_attachment=True, download_name='keenetic-awg2.sh')
+        # Keep the installer in GitHub so it is always identical to the panel release.
+        return redirect('https://raw.githubusercontent.com/sokolovalex025-cmd/awg31-panel/main/keenetic-awg2.sh')
 
     @core.app.route('/keenetic/routes', methods=['POST'])
     def keenetic_routes():
