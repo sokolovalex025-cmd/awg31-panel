@@ -83,6 +83,7 @@ EOF
 systemctl daemon-reload
 systemctl enable awg31-network >/dev/null
 systemctl restart awg31-network
+systemctl is-active --quiet awg31-network
 systemctl enable awgpanel >/dev/null
 systemctl restart awgpanel
 sleep 2
