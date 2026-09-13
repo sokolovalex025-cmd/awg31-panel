@@ -1,61 +1,54 @@
-NOVA — KEENETIC FULL-TUNNEL ROUTING
+NOVA — KEENETIC ROUTING
+========================
 
-Purpose
-=======
-Send all Internet traffic from selected Keenetic devices through the NOVA AWG 2.0-compatible bridge.
-The primary NOVA AWG 3.1 interface awg0:1234 is not used or changed.
+Цель: направить весь LAN или выбранные устройства Keenetic через отдельный AWG bridge awg-keenetic. Основной awg0:1234/UDP не изменяется.
 
-Server bridge
-=============
-Endpoint: VPS_PUBLIC_IP:51820/UDP
-Tunnel: 10.77.0.0/24
-Keenetic: 10.77.0.2/32
-Server: 10.77.0.1
-MTU: 1280
+1. FULL TUNNEL — весь LAN
+--------------------------
+В клиентском peer:
+  AllowedIPs = 0.0.0.0/0
+  PersistentKeepalive = 25
 
-Keenetic peer
-=============
-Allowed IPs: 0.0.0.0/0
-Persistent Keepalive: 15-30 seconds
-DNS: 1.1.1.1 (or another reachable DNS server)
+На Keenetic:
+  * откройте настройки интерфейса AmneziaWG/WireGuard;
+  * включите использование этого интерфейса для доступа в Интернет;
+  * создайте/выберите Connection Policy, в которой этот интерфейс является основным подключением к Интернету;
+  * назначьте эту policy нужным LAN-устройствам или всей LAN-сети.
 
-IMPORTANT
-=========
-On Keenetic, Allowed IPs alone does not necessarily select which LAN devices use the tunnel. The WireGuard/AmneziaWG interface must be enabled for Internet access and selected in the appropriate Internet access policy.
+Важно: AllowedIPs=0.0.0.0/0 само по себе не назначает LAN-устройства на VPN. Маршрутизация устройств выполняется через Connection Policy KeeneticOS.
 
-Full LAN tunnel
-===============
-1. Open Internet / Connection Policies on Keenetic.
-2. Open the AWG/WireGuard client interface connected to the NOVA bridge.
-3. Enable "Use for accessing the Internet" for this interface.
-4. In the peer settings use Allowed IPs 0.0.0.0/0.
-5. Put this interface at the top of the policy used by the LAN devices that should use the VPN.
-6. For all LAN devices, assign the System/default policy to the VPN-enabled policy.
-7. Save the Keenetic configuration.
+2. ТЕСТ С ОДНИМ УСТРОЙСТВОМ
+----------------------------
+Сначала назначьте VPN policy одному компьютеру/телефону.
+Откройте интернет на нём и проверьте на VPS:
 
-Selected devices only
-=====================
-1. Create a separate Internet access policy, for example NOVA-VPN.
-2. Add the AWG/WireGuard interface as the global Internet path in that policy.
-3. Bind only the required LAN devices to NOVA-VPN.
-4. Leave other devices on the normal ISP policy.
+  awg show awg-keenetic
+  iptables -L FORWARD -n -v --line-numbers
+  iptables -t nat -L POSTROUTING -n -v --line-numbers
 
-Verification on VPS
-===================
-On the VPS run:
+Должны обновляться handshake и RX/TX, а счётчики FORWARD/POSTROUTING для 10.77.0.0/24 должны расти.
 
-awg show awg-keenetic
-iptables -L FORWARD -n -v --line-numbers
-iptables -t nat -L POSTROUTING -n -v --line-numbers
+3. ЕСЛИ HANDSHAKE ЕСТЬ, НО RX/TX НЕ РАСТЁТ
+--------------------------------------------
+Проблема находится на стороне policy routing Keenetic. Проверьте:
+  * AWG-интерфейс разрешён для выхода в Интернет;
+  * устройство действительно назначено VPN policy;
+  * policy активна;
+  * DNS не отправляется через другой WAN-профиль.
 
-When a selected Keenetic device opens a website, the following counters should increase:
-- FORWARD: awg-keenetic -> WAN
-- POSTROUTING: source 10.77.0.0/24 -> ens3
+4. БЕЗОПАСНОСТЬ
+---------------
+Не публикуйте клиентский конфиг: он содержит приватный ключ.
+Не изменяйте awg0.conf — это отдельный NOVA AWG 3.1 интерфейс.
 
-The peer handshake should also refresh.
+5. SERVER DATA-PLANE
+--------------------
+Серверный bridge использует:
+  interface: awg-keenetic
+  subnet: 10.77.0.0/24
+  server: 10.77.0.1
+  client: 10.77.0.2
+  UDP: 51820
+  MTU: 1280
 
-If handshake is old and FORWARD remains 0
-==========================================
-The server bridge is not receiving client data. Check the Keenetic Internet access policy and ensure the AWG interface is actually selected for the LAN device.
-
-Do not change the primary NOVA awg0 configuration.
+NOVA сохраняет awg0 и его Strong Mobile профиль отдельно.
