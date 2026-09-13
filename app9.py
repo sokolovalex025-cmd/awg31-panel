@@ -29,6 +29,7 @@ core.CSS += '''<style>
 .sidebar::-webkit-scrollbar{width:7px}.sidebar::-webkit-scrollbar-track{background:transparent}.sidebar::-webkit-scrollbar-thumb{background:#33445c;border-radius:10px;border:2px solid transparent;background-clip:padding-box}.sidebar::-webkit-scrollbar-thumb:hover{background:#4f8cff;background-clip:padding-box}
 .nova-status{display:flex;gap:10px;align-items:center;padding:13px 15px;margin:0 0 14px;border:1px solid #1c5548;border-radius:12px;background:#0b241e}.nova-status .pulse{width:9px;height:9px;border-radius:50%;background:#37d6a3;box-shadow:0 0 14px #37d6a399}.nova-status.bad{border-color:#60303b;background:#26131a}.nova-status.bad .pulse{background:#ff647c;box-shadow:0 0 14px #ff647c88}.nova-status b{font-size:13px}.nova-status small{display:block;color:#8290a3;margin-top:3px}
 .diag-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px}.diag-item{padding:13px;border:1px solid #202c3b;border-radius:11px;background:#101925}.diag-item b{display:block;margin-bottom:4px}.diag-item span{font-size:12px;color:#8290a3}@media(max-width:760px){.diag-grid{grid-template-columns:1fr}}
+.keenetic-nav{margin-top:8px!important;border-color:#234d68!important;background:linear-gradient(135deg,#102a3c,#10251f)!important;color:#fff!important}.keenetic-nav:hover{border-color:#4f8cff!important;transform:translateY(-1px)}
 </style>'''
 
 def _strong_mobile_status():
@@ -70,6 +71,34 @@ ob_ep=_find_endpoint('/obfuscation')
 if ob_ep:core.app.view_functions[ob_ep]=_enhanced_obfuscation
 diag_ep=_find_endpoint('/diagnostics')
 if diag_ep:core.app.view_functions[diag_ep]=_enhanced_diagnostics
+
+# Dedicated Keenetic action in the main NOVA sidebar.
+_original_nav = core.nav
+def _nova_nav(path):
+    html = _original_nav(path)
+    marker = '</nav>'
+    if marker in html:
+        active = 'active' if path.startswith('/keenetic') else ''
+        html = html.replace(marker, f'<a class="keenetic-nav {active}" href="/keenetic"><i>🛜</i>Настроить Keenetic</a>' + marker, 1)
+    return html
+core.nav = _nova_nav
+
+@core.app.route('/keenetic/setup')
+def keenetic_setup_redirect():
+    return __import__('flask').redirect('/keenetic')
+
+@core.app.route('/api/keenetic/ping')
+def keenetic_ping():
+    if not core.session.get('logged'):
+        return core.jsonify({'error':'auth required'}),401
+    try:
+        iface='awg-keenetic'
+        link=core.cmd('ip','link','show',iface)
+        show=core.cmd('awg','show',iface)
+        ready=link.returncode==0 and show.returncode==0
+        return core.jsonify({'ok':ready,'interface':iface,'exists':link.returncode==0,'awg':show.returncode==0,'message':'Keenetic bridge ready' if ready else 'Keenetic bridge requires attention'})
+    except Exception as e:
+        return core.jsonify({'ok':False,'error':str(e)}),500
 
 @core.app.route('/api/traffic92')
 def traffic92_compat():
