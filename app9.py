@@ -56,7 +56,7 @@ def nova_strong_mobile_api():return core.jsonify({'ok':True,**_strong_mobile_sta
 
 @core.app.route('/api/nova/diagnostics')
 def nova_diagnostics_api():
-    sm=_strong_mobile_status(); c=core.cfg(); port=c.get('ListenPort','1234'); ss=core.cmd('ss','-lun').stdout
+    sm=_strong_mobile_status(); c=core.cfg(); port=c.get('ListenPort','1234'); ss=core.cmd('ss','-lun').stdout or ''
     udp_ok=any((':'+str(port)+' ') in x or ('0.0.0.0:'+str(port)) in x for x in ss.splitlines()); ps=core.peers(); now=int(time.time())
     handshakes=sum(1 for x in ps.values() if x.get('handshake') and now-x['handshake']<=180)
     return core.jsonify({'ok':True,'awg':core.online(),'strong_mobile':sm['active'],'udp_listen':udp_ok,'port':port,'online_peers':handshakes,'peer_count':len(ps)})
@@ -72,7 +72,7 @@ def _enhanced_obfuscation():
     return core.layout('Strong Mobile',body,'/obfuscation')
 
 def _enhanced_diagnostics():
-    s=_strong_mobile_status(); now=int(time.time()); ps=core.peers(); recent=sum(1 for x in ps.values() if x.get('handshake') and now-x['handshake']<=180); port=core.cfg().get('ListenPort','1234'); udp=core.cmd('ss','-lun').stdout; udp_ok=any((':'+str(port)+' ') in x or ('0.0.0.0:'+str(port)) in x for x in udp.splitlines())
+    s=_strong_mobile_status(); now=int(time.time()); ps=core.peers(); recent=sum(1 for x in ps.values() if x.get('handshake') and now-x['handshake']<=180); port=core.cfg().get('ListenPort','1234'); udp=core.cmd('ss','-lun').stdout or ''; udp_ok=any((':'+str(port)+' ') in x or ('0.0.0.0:'+str(port)) in x for x in udp.splitlines())
     checks=[('AWG service',core.online(),'awg-quick@awg0 active'),('Strong Mobile',s.get('active',False),'live obfuscation parameters'),('UDP listener',udp_ok,f'UDP {port} listening'),('Recent handshakes',recent>0 if ps else True,f'{recent} peer(s) active')]
     items=''.join(f'<div class="diag-item"><b>{"✓" if ok else "✕"} {name}</b><span>{detail}</span></div>' for name,ok,detail in checks)
     body=f'''<div class="hero"><div><div class="eyebrow">SYSTEM CHECK</div><h1>Диагностика</h1><p>Проверка VPN от сервиса до подключённых клиентов.</p></div><a class="btn" href="/diagnostics">↻ Обновить</a></div><div class="card"><div class="toolbar"><h2>Состояние системы</h2><span class="badge {'on' if all(x[1] for x in checks) else 'warn'}">{'ВСЁ OK' if all(x[1] for x in checks) else 'ТРЕБУЕТ ВНИМАНИЯ'}</span></div><div class="diag-grid">{items}</div></div><div class="card" style="margin-top:14px"><h2 style="margin-top:0">Активные соединения</h2><p class="muted">Последний handshake считается активным в течение 180 секунд.</p><div class="kv"><div><span>Peers</span><b>{len(ps)}</b></div><div><span>Online</span><b class="ok">{recent}</b></div><div><span>UDP</span><b>{port}</b></div><div><span>Strong Mobile</span><b class="{'ok' if s.get('active') else 'bad'}">{'ACTIVE' if s.get('active') else 'INACTIVE'}</b></div></div></div>'''
@@ -86,10 +86,10 @@ if diag_ep:core.app.view_functions[diag_ep]=_enhanced_diagnostics
 _original_nav = core.nav
 def _nova_nav(path):
     html = _original_nav(path)
-    marker = '</nav>'
-    if marker in html:
-        active = 'active' if path.startswith('/keenetic') else ''
-        html = html.replace(marker, f'<a class="keenetic-nav {active}" href="/keenetic"><i>🛜</i>Настроить Keenetic</a>' + marker, 1)
+    active = 'active' if path.startswith('/keenetic') else ''
+    link = f'<a class="keenetic-nav {active}" href="/keenetic"><i>🛜</i>Настроить Keenetic</a>'
+    if 'href="/keenetic"' not in html:
+        html += link
     return html
 core.nav = _nova_nav
 
