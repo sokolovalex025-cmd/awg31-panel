@@ -88,7 +88,10 @@ else
   chmod 600 "$BASE/config/psk.key"
 fi
 
-# AWG 2.0 format: S3/S4 + I1 are recognized by KeeneticOS 5.1+.
+# AWG 2.0 compatibility profile. I1/I2/I3/I4/I5 are deliberately omitted:
+# current amneziawg-go/awg-quick builds can reject CPS tagged values with
+# "Unable to modify interface: Invalid argument". AWG 2.0 remains valid with
+# Jc/Jmin/Jmax, S1-S4 and H1-H4; CPS is optional.
 cat >"$BASE/config/awg0.conf" <<EOF
 [Interface]
 PrivateKey = $SERVER_PRIVATE_KEY
@@ -106,7 +109,6 @@ H1 = 1
 H2 = 2
 H3 = 3
 H4 = 4
-I1 = <r 2><b 0x858000010001000000000669636c6f756403636f6d0000010001c00c000100010000105a00044d583737>
 PostUp = iptables -A FORWARD -i %i -j ACCEPT; iptables -t nat -A POSTROUTING -s 10.77.0.0/24 -o eth0 -j MASQUERADE
 PostDown = iptables -D FORWARD -i %i -j ACCEPT; iptables -t nat -D POSTROUTING -s 10.77.0.0/24 -o eth0 -j MASQUERADE
 
@@ -138,7 +140,6 @@ H1 = 1
 H2 = 2
 H3 = 3
 H4 = 4
-I1 = <r 2><b 0x858000010001000000000669636c6f756403636f6d0000010001c00c000100010000105a00044d583737>
 
 [Peer]
 PublicKey = $SERVER_PUBLIC_KEY
