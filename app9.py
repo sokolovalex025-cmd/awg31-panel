@@ -78,12 +78,10 @@ def _enhanced_diagnostics():
     body=f'''<div class="hero"><div><div class="eyebrow">SYSTEM CHECK</div><h1>Диагностика</h1><p>Проверка VPN от сервиса до подключённых клиентов.</p></div><a class="btn" href="/diagnostics">↻ Обновить</a></div><div class="card"><div class="toolbar"><h2>Состояние системы</h2><span class="badge {'on' if all(x[1] for x in checks) else 'warn'}">{'ВСЁ OK' if all(x[1] for x in checks) else 'ТРЕБУЕТ ВНИМАНИЯ'}</span></div><div class="diag-grid">{items}</div></div><div class="card" style="margin-top:14px"><h2 style="margin-top:0">Активные соединения</h2><p class="muted">Последний handshake считается активным в течение 180 секунд.</p><div class="kv"><div><span>Peers</span><b>{len(ps)}</b></div><div><span>Online</span><b class="ok">{recent}</b></div><div><span>UDP</span><b>{port}</b></div><div><span>Strong Mobile</span><b class="{'ok' if s.get('active') else 'bad'}">{'ACTIVE' if s.get('active') else 'INACTIVE'}</b></div></div></div>'''
     return core.layout('Диагностика',body,'/diagnostics')
 
-ob_ep=_find_endpoint('/obfuscation')
-if ob_ep:core.app.view_functions[ob_ep]=_enhanced_obfuscation
-diag_ep=_find_endpoint('/diagnostics')
-if diag_ep:core.app.view_functions[diag_ep]=_enhanced_diagnostics
-
+# Replace the core layout wrapper so NOVA 11 branding and the Keenetic entry are
+# applied to every rendered page, including routes registered before this module.
 _original_nav = core.nav
+
 def _nova_nav(path):
     html = _original_nav(path)
     active = 'active' if path.startswith('/keenetic') else ''
@@ -91,7 +89,28 @@ def _nova_nav(path):
     if 'href="/keenetic"' not in html:
         html += link
     return html
+
 core.nav = _nova_nav
+
+_original_layout = core.layout
+
+def _nova_layout(title, body, path):
+    html = _original_layout(title, body, path)
+    html = html.replace('NOVA <span>10</span>', 'NOVA <span>11</span>')
+    html = html.replace("background.svg?v=NOVA')", "background.svg?v=NOVA11')")
+    return html
+
+core.layout = _nova_layout
+
+# Ensure existing Flask endpoints use the NOVA 11 layout wrapper too.
+for _rule in list(core.app.url_map.iter_rules()):
+    _view = core.app.view_functions.get(_rule.endpoint)
+    if _view is not None and _view.__module__ == 'app':
+        try:
+            _view.__globals__['layout'] = _nova_layout
+            _view.__globals__['nav'] = _nova_nav
+        except Exception:
+            pass
 
 @core.app.route('/keenetic/setup')
 def keenetic_setup_redirect():
