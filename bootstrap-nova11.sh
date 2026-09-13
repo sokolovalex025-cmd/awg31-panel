@@ -62,10 +62,10 @@ ok 'NOVA health endpoint responds'
 
 log 'Verifying optional modules'
 cd /opt/awg31-panel
-/opt/awg31-panel/venv/bin/python - <<'PY'
-import sys, importlib
-sys.path.insert(0, '/opt/awg31-panel')
-for name in ('app','nova11','keenetic','balancer','balancer_provision','panel_bootstrap'):
+PYTHONPATH=/opt/awg31-panel /opt/awg31-panel/venv/bin/python - <<'PY'
+import importlib
+modules=('app','nova11','keenetic','balancer','balancer_provision','panel_bootstrap')
+for name in modules:
     importlib.import_module(name)
     print('[ OK ] import', name)
 PY
