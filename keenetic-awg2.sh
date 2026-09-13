@@ -35,9 +35,9 @@ fi
 mkdir -p "$BASE/config" "$BASE/clients"
 chmod 700 "$BASE" "$BASE/config" "$BASE/clients"
 
-# Build a pinned, isolated AWG 2.0 userspace image from the official Amnezia base.
+# AWG 2.0 is pinned explicitly; do not use :latest because it may move to AWG 3.x.
 cat >"$BASE/Dockerfile" <<'EOF'
-FROM amneziavpn/amneziawg-go:latest
+FROM amneziavpn/amneziawg-go:2.0.0
 RUN apk add --no-cache bash curl dumb-init iptables
 RUN mkdir -p /opt/amnezia/awg
 COPY start.sh /opt/amnezia/start.sh
@@ -88,7 +88,7 @@ else
   chmod 600 "$BASE/config/psk.key"
 fi
 
-# AWG 2.0 format: S3/S4 + I1 are required/recognized by KeeneticOS 5.1+.
+# AWG 2.0 format: S3/S4 + I1 are recognized by KeeneticOS 5.1+.
 cat >"$BASE/config/awg0.conf" <<EOF
 [Interface]
 PrivateKey = $SERVER_PRIVATE_KEY
@@ -149,14 +149,10 @@ PersistentKeepalive = 25
 EOF
 chmod 600 "$BASE/clients/keenetic-awg2.conf"
 
-# Enable IPv4 forwarding on the host. Container NAT remains isolated from awg0.
 sysctl -w net.ipv4.ip_forward=1 >/dev/null
 printf '%s\n' 'net.ipv4.ip_forward=1' >/etc/sysctl.d/99-keenetic-awg2.conf
-
-# Host firewall: only the dedicated UDP port is opened.
 iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || iptables -A INPUT -p udp --dport "$PORT" -j ACCEPT
 
-# Do not create a second container over an existing one.
 if docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER"; then
   docker rm -f "$CONTAINER" >/dev/null
 fi
