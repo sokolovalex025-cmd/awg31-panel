@@ -4,6 +4,17 @@ import app as core
 core.VERSION='10.0'
 core.BG_VERSION='NOVA'
 
+# NOVA AWG cluster modules. They register their routes against the same
+# Flask application used by awgpanel.service.
+try:
+    import balancer
+except Exception:
+    balancer=None
+try:
+    import balancer_provision
+except Exception:
+    balancer_provision=None
+
 # Compatibility endpoint for older NOVA/8.x browser clients that still poll
 # /api/traffic92. Keep it backed by the same AWG statistics used by NOVA 10.
 @core.app.route('/api/traffic92')
