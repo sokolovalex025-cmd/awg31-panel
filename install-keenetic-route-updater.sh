@@ -15,8 +15,8 @@ CRON="$BASE/nova-route-cron.sh"
 case "$INTERVAL" in *[!0-9]*|'') echo "Interval must be seconds." >&2; exit 2;; esac
 [ "$INTERVAL" -ge 300 ] 2>/dev/null || { echo "Minimum interval is 300 seconds." >&2; exit 2; }
 
-if [ "${PANEL_URL%/}" = "" ]; then exit 2; fi
 FEED_URL="${PANEL_URL%/}/keenetic/routes/feed?service=all"
+UPDATER_URL="https://raw.githubusercontent.com/sokolovalex025-cmd/awg31-panel/main/keenetic-route-updater.sh"
 
 if ! command -v ndmc >/dev/null 2>&1; then
     echo "ndmc is required. This installer is intended for KeeneticOS with Entware/Opkg." >&2
@@ -38,11 +38,10 @@ fi
 
 mkdir -p "$BASE"
 
-SRC="${PANEL_URL%/}/keenetic/routes/updater.sh"
 if command -v curl >/dev/null 2>&1; then
-    curl -fsSL --max-time 30 "$SRC" -o "$SCRIPT"
+    curl -fsSL --max-time 30 "$UPDATER_URL" -o "$SCRIPT"
 elif command -v wget >/dev/null 2>&1; then
-    wget -qO "$SCRIPT" "$SRC"
+    wget -qO "$SCRIPT" "$UPDATER_URL"
 fi
 chmod 700 "$SCRIPT"
 
@@ -62,45 +61,33 @@ set -eu
 EOF
 chmod 700 "$CRON"
 
-# Prefer Entware cron. If it is not running yet, create a self-contained
-# scheduler using the configured interval and the normal Entware rc.d hook.
 INIT="/opt/etc/init.d/S99nova-routes"
 cat > "$INIT" <<EOF
 #!/bin/sh
 # NOVA automatic VPS route updater
-ENABLED=yes
-. /opt/etc/init.d/rc.func
-
+PID=/opt/var/run/nova-routes.pid
 case "\$1" in
   start)
-    start-stop-daemon --start --background --make-pidfile --pidfile /opt/var/run/nova-routes.pid --exec /bin/sh -- -c 'while :; do /opt/etc/nova-route-updater/nova-route-cron.sh; sleep '"$INTERVAL"'; done'
+    if [ -f "\$PID" ] && kill -0 "\$(cat "\$PID")" 2>/dev/null; then exit 0; fi
+    start-stop-daemon --start --background --make-pidfile --pidfile "\$PID" --exec /bin/sh -- -c 'while :; do /opt/etc/nova-route-updater/nova-route-cron.sh; sleep $INTERVAL; done'
     ;;
   stop)
-    if [ -f /opt/var/run/nova-routes.pid ]; then
-      kill "$(cat /opt/var/run/nova-routes.pid)" 2>/dev/null || true
-      rm -f /opt/var/run/nova-routes.pid
-    fi
+    if [ -f "\$PID" ]; then kill "\$(cat "\$PID")" 2>/dev/null || true; rm -f "\$PID"; fi
     ;;
   restart)
     "\$0" stop
     "\$0" start
     ;;
   status)
-    if [ -f /opt/var/run/nova-routes.pid ] && kill -0 "$(cat /opt/var/run/nova-routes.pid)" 2>/dev/null; then echo running; else echo stopped; fi
+    if [ -f "\$PID" ] && kill -0 "\$(cat "\$PID")" 2>/dev/null; then echo running; else echo stopped; fi
     ;;
 esac
 EOF
 chmod 700 "$INIT"
 
-# Run once immediately so errors are visible during installation.
+# Run once immediately so feed/policy/interface errors are visible.
 "$CRON"
 "$INIT" stop >/dev/null 2>&1 || true
 "$INIT" start
 
-echo "NOVA automatic routes installed."
-echo "Feed: $FEED_URL"
-echo "Policy: $POLICY"
-echo "Interface: $IFACE"
-echo "Interval: ${INTERVAL}s"
-echo "State: /opt/etc/nova-routes.state"
-echo "Log: /opt/var/log/nova-route-updater.log"
+printf '%s\n' "NOVA automatic routes installed." "Feed: $FEED_URL" "Policy: $POLICY" "Interface: $IFACE" "Interval: ${INTERVAL}s" "State: /opt/etc/nova-routes.state" "Log: /opt/var/log/nova-route-updater.log"
