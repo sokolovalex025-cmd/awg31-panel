@@ -26,5 +26,10 @@ try:
     import telegram_ui
 except Exception:
     telegram_ui = None
+try:
+    import nova14_theme
+    nova14_theme.apply(nova11)
+except Exception:
+    pass
 
 nova11.core.app.run(host='0.0.0.0',port=8080)
