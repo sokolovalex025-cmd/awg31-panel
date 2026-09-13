@@ -23,8 +23,8 @@ try:
 except Exception: pass
 try: import nova_mobile_diagnostics
 except Exception: nova_mobile_diagnostics=None
-try:
-    import domain_manager; domain_manager.apply(nova11.core.app)
-except Exception as e:
-    print('NOVA domain manager disabled:',e,flush=True)
+try: import antiblock; antiblock.apply(nova11.core.app)
+except Exception as e: print('NOVA AntiBlock disabled:',e,flush=True)
+try: import domain_manager; domain_manager.apply(nova11.core.app)
+except Exception as e: print('NOVA domain manager disabled:',e,flush=True)
 nova11.core.app.run(host='0.0.0.0',port=8080)
