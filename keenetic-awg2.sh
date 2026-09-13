@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Isolated AmneziaWG 2.0 userspace server for KeeneticOS 5.1+.
-# It does NOT modify /etc/amnezia/amneziawg/awg0.conf or the NOVA AWG 3.1 service.
+# Keenetic-compatible AWG 2.0 profile using the already installed, matching
+# AmneziaWG kernel/userspace on the VPS. The existing NOVA awg0 (AWG 3.1)
+# interface is never modified.
 
 [ "$(id -u)" -eq 0 ] || { echo 'Run as root.'; exit 1; }
 
 BASE=/opt/keenetic-awg2
-CONTAINER=keenetic-awg2
+IFACE=awg-keenetic
 PORT="${KEENETIC_AWG2_PORT:-51820}"
 SUBNET="10.77.0.0/24"
 SERVER_IP="10.77.0.1"
@@ -21,46 +22,36 @@ case "$PORT" in
 esac
 [ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ] || { echo 'Port must be 1..65535.'; exit 1; }
 
+command -v awg >/dev/null 2>&1 || { echo 'Matching AmneziaWG tools are not installed.'; exit 1; }
+command -v awg-quick >/dev/null 2>&1 || { echo 'awg-quick is not installed.'; exit 1; }
+
+HOST_AWG_VERSION=$(awg --version 2>/dev/null | head -1 || true)
+MODULE_VERSION=$(modinfo -F version amneziawg 2>/dev/null || true)
+case "$HOST_AWG_VERSION" in
+  *3.1*) ;;
+  *) echo "Unsupported host AWG tools: ${HOST_AWG_VERSION:-unknown}"; exit 1;;
+esac
+case "$MODULE_VERSION" in
+  3.1*) ;;
+  *) echo "Unsupported amneziawg kernel module: ${MODULE_VERSION:-unknown}"; exit 1;;
+esac
+
 if ss -lunH 2>/dev/null | awk '{print $5}' | grep -Eq ":${PORT}$"; then
   echo "UDP port $PORT is already in use. Set KEENETIC_AWG2_PORT to another free port."
   exit 1
 fi
 
-if ! command -v docker >/dev/null 2>&1; then
-  apt-get update
-  apt-get install -y docker.io
-  systemctl enable --now docker
-fi
-
 mkdir -p "$BASE/config" "$BASE/clients"
 chmod 700 "$BASE" "$BASE/config" "$BASE/clients"
 
-# AWG 2.0 is pinned explicitly; do not use :latest because it may move to AWG 3.x.
-cat >"$BASE/Dockerfile" <<'EOF'
-FROM amneziavpn/amneziawg-go:2.0.0
-RUN apk add --no-cache bash curl dumb-init iptables
-RUN mkdir -p /opt/amnezia/awg
-COPY start.sh /opt/amnezia/start.sh
-RUN chmod 0755 /opt/amnezia/start.sh
-ENTRYPOINT ["dumb-init", "/opt/amnezia/start.sh"]
-EOF
+# Stop/remove the broken Docker bridge from previous versions. Do not touch NOVA awg0.
+if command -v docker >/dev/null 2>&1 && docker ps -a --format '{{.Names}}' | grep -qx keenetic-awg2; then
+  docker rm -f keenetic-awg2 >/dev/null 2>&1 || true
+fi
 
-cat >"$BASE/start.sh" <<'EOF'
-#!/bin/bash
-set -e
-awg-quick down /opt/amnezia/awg/awg0.conf >/dev/null 2>&1 || true
-awg-quick up /opt/amnezia/awg/awg0.conf
-iptables -A INPUT -i awg0 -j ACCEPT
-iptables -A FORWARD -i awg0 -j ACCEPT
-iptables -A OUTPUT -o awg0 -j ACCEPT
-iptables -A FORWARD -i awg0 -o eth0 -s 10.77.0.0/24 -j ACCEPT
-iptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
-iptables -t nat -A POSTROUTING -s 10.77.0.0/24 -o eth0 -j MASQUERADE
-tail -f /dev/null
-EOF
-chmod 0755 "$BASE/start.sh"
-
-docker build --pull -t "$CONTAINER:awg2" "$BASE"
+# Bring down only our dedicated interface if an older installation exists.
+awg-quick down "$BASE/config/${IFACE}.conf" >/dev/null 2>&1 || true
+ip link del "$IFACE" >/dev/null 2>&1 || true
 
 if [ -f "$BASE/config/server_private.key" ]; then
   SERVER_PRIVATE_KEY=$(cat "$BASE/config/server_private.key")
@@ -88,11 +79,10 @@ else
   chmod 600 "$BASE/config/psk.key"
 fi
 
-# AWG 2.0 compatibility profile. I1/I2/I3/I4/I5 are deliberately omitted:
-# current amneziawg-go/awg-quick builds can reject CPS tagged values with
-# "Unable to modify interface: Invalid argument". AWG 2.0 remains valid with
-# Jc/Jmin/Jmax, S1-S4 and H1-H4; CPS is optional.
-cat >"$BASE/config/awg0.conf" <<EOF
+# KeeneticOS 5.1+ expects the AWG 1.5/2.0-style fields. I1-I5 are omitted.
+# The VPS uses the matching AWG 3.1 tools/kernel, but this profile only uses
+# the AWG 2.0-compatible J/S/H parameter set.
+cat >"$BASE/config/${IFACE}.conf" <<EOF
 [Interface]
 PrivateKey = $SERVER_PRIVATE_KEY
 Address = $SERVER_IP/24
@@ -109,15 +99,15 @@ H1 = 1
 H2 = 2
 H3 = 3
 H4 = 4
-PostUp = iptables -A FORWARD -i %i -j ACCEPT; iptables -t nat -A POSTROUTING -s 10.77.0.0/24 -o eth0 -j MASQUERADE
-PostDown = iptables -D FORWARD -i %i -j ACCEPT; iptables -t nat -D POSTROUTING -s 10.77.0.0/24 -o eth0 -j MASQUERADE
+PostUp = iptables -A FORWARD -i %i -s $SUBNET -j ACCEPT; iptables -A FORWARD -o %i -d $SUBNET -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT; iptables -t nat -A POSTROUTING -s $SUBNET -o $WAN_IF -j MASQUERADE
+PostDown = iptables -D FORWARD -i %i -s $SUBNET -j ACCEPT; iptables -D FORWARD -o %i -d $SUBNET -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT; iptables -t nat -D POSTROUTING -s $SUBNET -o $WAN_IF -j MASQUERADE
 
 [Peer]
 PublicKey = $CLIENT_PUBLIC_KEY
 PresharedKey = $PSK
 AllowedIPs = $CLIENT_IP/32
 EOF
-chmod 600 "$BASE/config/awg0.conf"
+chmod 600 "$BASE/config/${IFACE}.conf"
 
 PUBLIC_IP=$(curl -4 -fsS --max-time 5 https://api.ipify.org || true)
 [ -n "${PUBLIC_IP:-}" ] || PUBLIC_IP="SERVER_IP"
@@ -128,7 +118,6 @@ PrivateKey = $CLIENT_PRIVATE_KEY
 Address = $CLIENT_IP/32
 DNS = 1.1.1.1
 MTU = $MTU
-
 Jc = 3
 Jmin = 10
 Jmax = 30
@@ -154,57 +143,68 @@ sysctl -w net.ipv4.ip_forward=1 >/dev/null
 printf '%s\n' 'net.ipv4.ip_forward=1' >/etc/sysctl.d/99-keenetic-awg2.conf
 iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || iptables -A INPUT -p udp --dport "$PORT" -j ACCEPT
 
-if docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER"; then
-  docker rm -f "$CONTAINER" >/dev/null
-fi
+# Validate the exact server config with the same AWG userspace/kernel pair.
+ip link add "$IFACE" type amneziawg
+awg setconf "$IFACE" "$BASE/config/${IFACE}.conf"
+ip address add "$SERVER_IP/24" dev "$IFACE"
+ip link set mtu "$MTU" up dev "$IFACE"
 
-docker run -d \
-  --name "$CONTAINER" \
-  --restart always \
-  --privileged \
-  --cap-add=NET_ADMIN \
-  -p "$PORT:$PORT/udp" \
-  -v "$BASE/config:/opt/amnezia/awg" \
-  "$CONTAINER:awg2"
+# NAT/FORWARD rules are installed explicitly because this interface is not
+# managed by the broken Docker userspace bridge anymore.
+iptables -C FORWARD -i "$IFACE" -s "$SUBNET" -j ACCEPT 2>/dev/null || iptables -A FORWARD -i "$IFACE" -s "$SUBNET" -j ACCEPT
+iptables -C FORWARD -o "$IFACE" -d "$SUBNET" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || iptables -A FORWARD -o "$IFACE" -d "$SUBNET" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -t nat -C POSTROUTING -s "$SUBNET" -o "$WAN_IF" -j MASQUERADE 2>/dev/null || iptables -t nat -A POSTROUTING -s "$SUBNET" -o "$WAN_IF" -j MASQUERADE
 
-sleep 3
-if ! docker exec "$CONTAINER" awg show awg0 >/dev/null 2>&1; then
-  echo 'AWG 2.0 container failed to start.'
-  docker logs "$CONTAINER" 2>&1 | tail -80 || true
-  exit 1
-fi
+# Replace the old systemd unit with a robust service that owns only this interface.
+cat >"/etc/systemd/system/keenetic-awg2.service" <<EOF
+[Unit]
+Description=NOVA Keenetic-compatible AWG 2.0 bridge
+After=network-online.target
+Wants=network-online.target
+Before=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/awg-quick up $BASE/config/${IFACE}.conf
+ExecStop=/usr/bin/awg-quick down $BASE/config/${IFACE}.conf
+ExecStartPost=/usr/bin/iptables -C INPUT -p udp --dport $PORT -j ACCEPT
+ExecStartPost=/bin/sh -c '/usr/bin/iptables -C FORWARD -i $IFACE -s $SUBNET -j ACCEPT || /usr/bin/iptables -A FORWARD -i $IFACE -s $SUBNET -j ACCEPT'
+ExecStartPost=/bin/sh -c '/usr/bin/iptables -t nat -C POSTROUTING -s $SUBNET -o $WAN_IF -j MASQUERADE || /usr/bin/iptables -t nat -A POSTROUTING -s $SUBNET -o $WAN_IF -j MASQUERADE'
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable keenetic-awg2.service >/dev/null
+systemctl restart keenetic-awg2.service
+
+# Final checks.
+ip link show "$IFACE" >/dev/null
+awg show "$IFACE" >/dev/null
 
 cat >"$BASE/README.txt" <<EOF
-NOVA Keenetic AWG 2.0 bridge
-============================
-Container: $CONTAINER
+NOVA Keenetic AWG 2.0-compatible bridge
+=======================================
+Interface: $IFACE
 UDP port: $PORT
 Server subnet: $SUBNET
 Client config: $BASE/clients/keenetic-awg2.conf
 
-This is a separate userspace AWG 2.0 endpoint. The existing NOVA AWG 3.1 awg0 interface is not modified.
-KeeneticOS 5.1+ can import the generated .conf. For selective routing, use the NOVA Keenetic route generator and select this VPN interface.
+The bridge uses the VPS's matching AmneziaWG 3.1 userspace/kernel pair with
+only the AWG 2.0-compatible Jc/Jmin/Jmax/S1-S4/H1-H4 profile. No I1-I5 fields
+are used. The existing NOVA AWG 3.1 awg0 interface remains untouched.
+
+KeeneticOS 5.1+ can use the generated config where supported. For selective
+routing, use the NOVA Keenetic route generator and route through this tunnel.
 EOF
 
-cat >/etc/systemd/system/keenetic-awg2.service <<EOF
-[Unit]
-Description=NOVA isolated AmneziaWG 2.0 bridge for Keenetic
-After=docker.service network-online.target
-Requires=docker.service
-Wants=network-online.target
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=/usr/bin/docker start $CONTAINER
-ExecStop=/usr/bin/docker stop -t 10 $CONTAINER
-[Install]
-WantedBy=multi-user.target
-EOF
-systemctl daemon-reload
-systemctl enable keenetic-awg2.service >/dev/null
-
-printf '\nKeenetic AWG 2.0 bridge installed.\n'
+printf '\nKeenetic AWG 2.0-compatible bridge installed.\n'
+printf 'Interface: %s\n' "$IFACE"
 printf 'Config: %s\n' "$BASE/clients/keenetic-awg2.conf"
 printf 'Endpoint: %s:%s/udp\n' "$PUBLIC_IP" "$PORT"
-printf 'Container: %s\n' "$CONTAINER"
-printf 'Existing AWG 3.1: untouched\n'
+printf 'Host AWG: %s\n' "$HOST_AWG_VERSION"
+printf 'AWG kernel: %s\n' "$MODULE_VERSION"
+printf 'Existing AWG 3.1 awg0: untouched\n'
+printf '\nCheck: awg show %s\n' "$IFACE"
