@@ -7,6 +7,7 @@ import telegram_bot
 DB = Path('/opt/awg31-panel/panel.db')
 ORIGINAL_ENV = telegram_bot.env
 
+
 def panel_env():
     values = {}
     try:
@@ -17,6 +18,7 @@ def panel_env():
     except Exception:
         pass
     return values
+
 
 def env_bridge():
     values = panel_env()
@@ -29,5 +31,12 @@ def env_bridge():
         current['VPN_DEFAULT_DAYS'] = values['telegram_default_days']
     return current
 
+
 telegram_bot.env = env_bridge
+# Load optional UI/behavior extensions before starting the polling loop.
+try:
+    import telegram_delete  # noqa: F401
+except Exception:
+    pass
+
 telegram_bot.loop()
