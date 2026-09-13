@@ -21,7 +21,7 @@ python3 -m venv "$REPO_DIR/venv"
 "$REPO_DIR/venv/bin/pip" install --upgrade pip
 "$REPO_DIR/venv/bin/pip" install Flask 'qrcode[pil]'
 mkdir -p "$BASE/backups"
-for f in app.py nova11.py panel_bootstrap.py nova12_theme.py nova13_theme.py telegram_ui.py telegram_bot.py telegram_runner.py telegram_delete.py keenetic.py balancer.py balancer_provision.py keenetic-routing-guide.txt background.svg nova-network-fix.sh; do
+for f in app.py nova11.py panel_bootstrap.py nova12_theme.py nova13_theme.py telegram_ui.py telegram_bot.py telegram_runner.py telegram_delete.py keenetic.py balancer.py balancer_provision.py keenetic-routing-guide.txt background.svg nova-network-fix.sh nova_mobile_diagnostics.py; do
   [ -f "$REPO_DIR/$f" ] && install -m 644 "$REPO_DIR/$f" "$BASE/$f"
 done
 chmod 755 "$BASE/nova11.py" "$BASE/panel_bootstrap.py" "$BASE/telegram_bot.py" "$BASE/telegram_runner.py" "$BASE/telegram_delete.py" "$BASE/nova-network-fix.sh"
@@ -79,7 +79,7 @@ NoNewPrivileges=false
 [Install]
 WantedBy=multi-user.target
 EOF
-"$REPO_DIR/venv/bin/python" -m py_compile "$BASE/app.py" "$BASE/nova11.py" "$BASE/panel_bootstrap.py" "$BASE/telegram_ui.py" "$BASE/telegram_bot.py" "$BASE/telegram_runner.py" "$BASE/telegram_delete.py" "$BASE/keenetic.py" "$BASE/balancer.py"
+"$REPO_DIR/venv/bin/python" -m py_compile "$BASE/app.py" "$BASE/nova11.py" "$BASE/panel_bootstrap.py" "$BASE/telegram_ui.py" "$BASE/telegram_bot.py" "$BASE/telegram_runner.py" "$BASE/telegram_delete.py" "$BASE/keenetic.py" "$BASE/balancer.py" "$BASE/nova_mobile_diagnostics.py"
 systemctl daemon-reload
 systemctl enable awg31-network >/dev/null
 systemctl restart awg31-network
@@ -96,6 +96,7 @@ printf 'Panel: active (awgpanel)\n'
 printf 'Telegram: runtime installed (awgpanel-telegram)\n'
 printf 'Network: persistent AWG client NAT + IPv4 forwarding\n'
 printf 'Client DNS: 1.1.1.1,8.8.8.8 (old 10.66.66.1 default migrated)\n'
+printf 'Mobile diagnostics: /mobile-diagnostics and /api/mobile-diagnostics\n'
 printf 'AWG interface/config: preserved\n'
 printf 'Keenetic: native NOVA menu + /keenetic\n'
 printf 'Health: /api/nova/health\n'
