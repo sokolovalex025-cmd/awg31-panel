@@ -1,5 +1,6 @@
 from flask import request, Response, redirect
 import ipaddress
+import json
 import os
 import re
 import subprocess
@@ -45,6 +46,21 @@ def _logged(core):
     return bool(core.session.get('logged'))
 
 
+def _route_feed(service='all'):
+    if service == 'all':
+        selected = ROUTES
+    else:
+        selected = {service: ROUTES[service]} if service in ROUTES else None
+    if selected is None:
+        return None
+    routes = []
+    for name, cidrs in selected.items():
+        for cidr in cidrs:
+            routes.append(str(ipaddress.ip_network(cidr, strict=False)))
+    routes = sorted(set(routes), key=lambda x: (ipaddress.ip_network(x).version, int(ipaddress.ip_network(x).network_address), ipaddress.ip_network(x).prefixlen))
+    return routes
+
+
 def _parse_awg_show(text):
     result = {'latest_handshake': None, 'rx': 0, 'tx': 0, 'peers': 0}
     if not text:
@@ -84,7 +100,8 @@ def register(core):
 <div class="card"><h3>2. Конфиг для Keenetic</h3><p>Готовый клиентский профиль с AWG 2.0-compatible параметрами.</p><a class="btn" href="/keenetic/awg2-config">Скачать .conf</a><p class="muted">Файл содержит приватный ключ. Не публикуйте его.</p></div>
 <div class="card"><h3>3. Диагностика data-plane</h3><p>Проверяет интерфейс, handshake, передачу, forwarding, NAT и маршрут через WAN.</p><a class="btn" href="/keenetic/diagnostics">Открыть диагностику</a><a class="btn" href="/api/keenetic/status">JSON статус</a></div>
 <div class="card"><h3>4. Full tunnel на Keenetic</h3><p>В peer используйте <code>AllowedIPs = 0.0.0.0/0</code>, а на самом Keenetic включите использование AWG-интерфейса для доступа в Интернет и назначьте его нужной политике подключения. Одного AllowedIPs недостаточно для выбора LAN-устройств.</p><p class="muted">Если весь LAN должен идти через VPN, используйте VPN-интерфейс как основной путь в политике. Для выборочной маршрутизации создайте отдельную политику и привяжите к ней нужные устройства.</p><a class="btn" href="/keenetic/routing-guide">Открыть инструкцию маршрутизации</a><a class="btn" href="/keenetic/routing-guide.txt">Скачать инструкцию</a></div>
-<div class="card"><h3>5. Выборочная маршрутизация</h3><p>Ниже можно получить справочный список IPv4 CIDR. Это не универсальный импорт: CDN и IP сервисов меняются, поэтому для стабильной выборочной маршрутизации лучше использовать политики KeeneticOS по доменам/IP.</p><form method="post" action="/keenetic/routes"><select name="service">''' + ''.join(f'<option value="{k}">{v[0]}</option>' for k,v in SERVICES.items()) + '''</select> <button class="btn" type="submit">Скачать CIDR</button></form></div>
+<div class="card"><h3>5. Маршруты с VPS</h3><p>Теперь NOVA может отдавать актуальный feed маршрутов напрямую с VPS. Keenetic/скрипт обновления может забирать его по URL без ручного копирования CIDR.</p><p><code>/keenetic/routes/feed?service=all</code></p><a class="btn" href="/keenetic/routes/feed?service=all">Открыть feed</a><a class="btn" href="/keenetic/routes/feed.json?service=all">JSON feed</a></div>
+<div class="card"><h3>6. Выборочная маршрутизация</h3><p>Ниже можно получить справочный список IPv4 CIDR. Это совместимо с текущей ручной настройкой и служит источником для автоматического обновления.</p><form method="post" action="/keenetic/routes"><select name="service">''' + ''.join(f'<option value="{k}">{v[0]}</option>' for k,v in SERVICES.items()) + '''</select> <button class="btn" type="submit">Скачать CIDR</button></form></div>
 </div></body></html>''', mimetype='text/html')
 
     @app.route('/keenetic/awg2-installer.sh')
@@ -106,6 +123,24 @@ def register(core):
             return Response(f'Cannot read Keenetic config: {e}', status=500, mimetype='text/plain')
         return Response(data, mimetype='application/octet-stream', headers={'Content-Disposition': 'attachment; filename="nova-keenetic-awg2.conf"', 'Cache-Control': 'no-store', 'Pragma': 'no-cache'})
 
+    @app.route('/keenetic/routes/feed')
+    def keenetic_route_feed():
+        service = request.args.get('service', 'all').strip().lower()
+        routes = _route_feed(service)
+        if routes is None:
+            return Response('Unknown service', status=400, mimetype='text/plain')
+        body = '# NOVA Keenetic route feed\n# source: VPS/NOVA\n# service: ' + service + '\n' + '\n'.join(routes) + '\n'
+        return Response(body, mimetype='text/plain', headers={'Cache-Control': 'no-store', 'Content-Disposition': 'inline; filename="nova-routes.txt"'})
+
+    @app.route('/keenetic/routes/feed.json')
+    def keenetic_route_feed_json():
+        service = request.args.get('service', 'all').strip().lower()
+        routes = _route_feed(service)
+        if routes is None:
+            return core.jsonify({'error': 'unknown service'}), 400
+        payload = {'version': 1, 'source': 'NOVA VPS', 'service': service, 'routes': routes}
+        return Response(json.dumps(payload, ensure_ascii=False, separators=(',', ':')), mimetype='application/json', headers={'Cache-Control': 'no-store'})
+
     @app.route('/keenetic/routes', methods=['POST'])
     def keenetic_routes():
         if not _logged(core):
@@ -113,7 +148,7 @@ def register(core):
         service = request.form.get('service', 'youtube')
         if service not in SERVICES:
             return Response('Unknown service', status=400)
-        lines = [f'# NOVA Keenetic reference routes: {service}', '# Static IPv4 CIDR list. CDN/domain changes may require updates.', '# This file is a reference list, not a universal KeeneticOS import format.']
+        lines = [f'# NOVA Keenetic reference routes: {service}', '# Static IPv4 CIDR list. CDN/domain changes may require updates.', '# This file is also available from /keenetic/routes/feed?service=' + service]
         lines.extend(str(ipaddress.ip_network(cidr, strict=False)) for cidr in ROUTES[service])
         lines.append('')
         return Response('\n'.join(lines), mimetype='text/plain', headers={'Content-Disposition': f'attachment; filename="nova-{service}-routes.txt"', 'Cache-Control': 'no-store'})
@@ -122,7 +157,7 @@ def register(core):
     def keenetic_routing_guide():
         if not _logged(core):
             return redirect('/login')
-        body = '''<div class="hero"><div><div class="eyebrow">NOVA / ROUTING</div><h1>Маршрутизация Keenetic</h1><p>Full-tunnel или выборочная маршрутизация через отдельный AWG bridge.</p></div></div><div class="card"><h2>Full tunnel</h2><ol><li>В peer оставьте <code>AllowedIPs = 0.0.0.0/0</code>.</li><li>В параметрах AWG/WireGuard-интерфейса включите <b>Use for accessing the Internet</b>.</li><li>В Connection Policies создайте/выберите политику с этим AWG-интерфейсом.</li><li>Для всего LAN назначьте эту политику как основную; для отдельных устройств привяжите их только к этой политике.</li><li>DNS укажите, например, <code>1.1.1.1</code>.</li></ol></div><div class="card"><h2>Проверка на VPS</h2><pre>awg show awg-keenetic
+        body = '''<div class="hero"><div><div class="eyebrow">NOVA / ROUTING</div><h1>Маршрутизация Keenetic</h1><p>Full-tunnel или выборочная маршрутизация через отдельный AWG bridge.</p></div></div><div class="card"><h2>Full tunnel</h2><ol><li>В peer оставьте <code>AllowedIPs = 0.0.0.0/0</code>.</li><li>В параметрах AWG/WireGuard-интерфейса включите <b>Use for accessing the Internet</b>.</li><li>В Connection Policies создайте/выберите политику с этим AWG-интерфейсом.</li><li>Для всего LAN назначьте эту политику как основную; для отдельных устройств привяжите их только к этой политике.</li><li>DNS укажите, например, <code>1.1.1.1</code>.</li></ol></div><div class="card"><h2>VPS route feed</h2><p>NOVA отдаёт маршруты напрямую с VPS: <code>/keenetic/routes/feed?service=all</code>. Это источник данных для автоматического обновления маршрутов на Keenetic. Сам KeeneticOS не получает эти CIDR автоматически только от факта существования URL — нужен updater на роутере (например, скрипт/Entware), который периодически забирает feed и применяет маршруты к нужной Connection Policy.</p></div><div class="card"><h2>Проверка на VPS</h2><pre>awg show awg-keenetic
 iptables -L FORWARD -n -v --line-numbers
 iptables -t nat -L POSTROUTING -n -v --line-numbers</pre><p>При открытии сайта на выбранном устройстве должны расти счётчики FORWARD и POSTROUTING для <code>10.77.0.0/24</code>, а handshake должен обновляться.</p></div><div class="card"><h2>Если handshake есть, но пакетов нет</h2><p>Проверьте именно Connection Policy на Keenetic: сам <code>AllowedIPs = 0.0.0.0/0</code> не назначает автоматически весь LAN на VPN. Интерфейс должен быть разрешён для выхода в Интернет и выбран в политике.</p></div>'''
         return core.layout('Keenetic — маршрутизация', body, '/keenetic/routing-guide')
