@@ -28,8 +28,15 @@ restore_stash() {
 trap restore_stash EXIT
 
 git pull --ff-only origin main
-chmod +x upgrade-panel9.sh keenetic-awg2.sh nova-update-all.sh
+chmod +x upgrade-panel9.sh keenetic-awg2.sh nova-update-all.sh add-keenetic-menu.sh add-telegram-keenetic-button.sh
 ./upgrade-panel9.sh
+
+# Add/repair the visible Keenetic entry in the web panel.
+./add-keenetic-menu.sh
+
+# Add/repair the Keenetic button in the Telegram bot.
+# This only edits the bot menu/handler and does not touch awg0 or Telegram credentials.
+./add-telegram-keenetic-button.sh
 
 # Restart only the dedicated Keenetic bridge if it already exists.
 # Do not run keenetic-awg2.sh here: reinstalling it is intentionally manual.
@@ -48,4 +55,5 @@ if systemctl list-unit-files --type=service 2>/dev/null | grep -q '^keenetic-awg
 else
   printf 'Keenetic bridge: not installed (manual install available via ./keenetic-awg2.sh).\n'
 fi
+printf 'Telegram Keenetic button: installed.\n'
 printf 'Telegram local changes: preserved if they existed before update.\n'
