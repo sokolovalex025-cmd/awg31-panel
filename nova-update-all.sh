@@ -28,7 +28,7 @@ restore_stash() {
 trap restore_stash EXIT
 
 git pull --ff-only origin main
-chmod +x upgrade-panel9.sh keenetic-awg2.sh nova-update-all.sh add-keenetic-menu.sh add-telegram-keenetic-button.sh
+chmod +x upgrade-panel9.sh keenetic-awg2.sh nova-update-all.sh add-keenetic-menu.sh add-telegram-keenetic-button.sh keenetic-route-updater.sh install-keenetic-route-updater.sh
 ./upgrade-panel9.sh
 
 # Add/repair the visible Keenetic entry in the web panel.
@@ -55,5 +55,6 @@ if systemctl list-unit-files --type=service 2>/dev/null | grep -q '^keenetic-awg
 else
   printf 'Keenetic bridge: not installed (manual install available via ./keenetic-awg2.sh).\n'
 fi
+printf 'Keenetic VPS route updater: available in repository.\n'
 printf 'Telegram Keenetic button: installed.\n'
 printf 'Telegram local changes: preserved if they existed before update.\n'
