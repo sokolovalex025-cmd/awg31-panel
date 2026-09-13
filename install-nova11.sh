@@ -33,13 +33,12 @@ python3 -m venv "$REPO_DIR/venv"
 "$REPO_DIR/venv/bin/pip" install Flask qrcode[pil]
 
 mkdir -p "$BASE/backups"
-for f in app.py nova11.py keenetic.py balancer.py balancer_provision.py keenetic-routing-guide.txt background.svg; do
+for f in app.py nova11.py panel_bootstrap.py keenetic.py balancer.py balancer_provision.py keenetic-routing-guide.txt background.svg; do
   [ -f "$REPO_DIR/$f" ] && install -m 644 "$REPO_DIR/$f" "$BASE/$f"
 done
-chmod 755 "$BASE/nova11.py"
-install -m 600 /dev/null "$BASE/panel.db" 2>/dev/null || true
+chmod 755 "$BASE/nova11.py" "$BASE/panel_bootstrap.py"
 
-# The panel database is created by the existing application bootstrap if present.
+# The bootstrap creates the SQLite schema and default settings on first start.
 # Do not touch /etc/amnezia/amneziawg/awg0.conf or /etc/wireguard/awg0.conf here.
 SECRET_DIR=/etc/awg31-panel
 SECRET_FILE="$SECRET_DIR/panel-secret"
@@ -62,7 +61,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=$BASE
 Environment=AWGPANEL_SECRET=$SECRET
-ExecStart=$REPO_DIR/venv/bin/python $BASE/nova11.py
+ExecStart=$REPO_DIR/venv/bin/python $BASE/panel_bootstrap.py
 Restart=on-failure
 RestartSec=2
 NoNewPrivileges=false
@@ -71,8 +70,7 @@ NoNewPrivileges=false
 WantedBy=multi-user.target
 EOF
 
-# Validate before enabling the service.
-"$REPO_DIR/venv/bin/python" -m py_compile "$BASE/app.py" "$BASE/nova11.py" "$BASE/keenetic.py" "$BASE/balancer.py"
+"$REPO_DIR/venv/bin/python" -m py_compile "$BASE/app.py" "$BASE/nova11.py" "$BASE/panel_bootstrap.py" "$BASE/keenetic.py" "$BASE/balancer.py"
 
 systemctl daemon-reload
 systemctl enable awgpanel >/dev/null
@@ -83,7 +81,7 @@ curl -fsS --max-time 5 http://127.0.0.1:8080/login >/dev/null
 
 printf '\nNOVA 11 installed successfully.\n'
 printf 'Service: awgpanel\n'
-printf 'ExecStart: %s\n' "$REPO_DIR/venv/bin/python $BASE/nova11.py"
+printf 'ExecStart: %s\n' "$REPO_DIR/venv/bin/python $BASE/panel_bootstrap.py"
 printf 'Web: http://SERVER:8080\n'
 printf 'AWG interface/config: preserved\n'
 printf 'Keenetic: native NOVA menu + /keenetic\n'
