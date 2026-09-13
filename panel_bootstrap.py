@@ -21,6 +21,9 @@ except Exception: telegram_ui=None
 try:
     import nova14_theme; nova14_theme.apply(nova11)
 except Exception: pass
+try:
+    import nova15_theme; nova15_theme.apply(nova11)
+except Exception as e: print('NOVA 15 theme disabled:',e,flush=True)
 try: import nova_mobile_diagnostics
 except Exception: nova_mobile_diagnostics=None
 try: import antiblock; antiblock.apply(nova11.core.app)
