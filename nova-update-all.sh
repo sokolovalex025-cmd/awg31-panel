@@ -1,57 +1,29 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# One-command NOVA update for an existing /root/awg31-panel checkout.
-# Preserves the user's local Telegram installer change and never reinstalls
-# the Keenetic bridge automatically.
-
+# Unified updater for NOVA 11.
+# Safe on an existing VPS: keeps awg0 config and does not reinstall Keenetic.
 [ "$(id -u)" -eq 0 ] || { echo 'Run as root.'; exit 1; }
 REPO_DIR="${REPO_DIR:-/root/awg31-panel}"
 cd "$REPO_DIR"
 
-if [ ! -d .git ]; then
-  echo "Git repository not found: $REPO_DIR"
-  exit 1
-fi
-
-STASHED=0
-if ! git diff --quiet -- install-telegram-full-v2.sh; then
-  git stash push -m "nova-update-preserve-telegram" -- install-telegram-full-v2.sh >/dev/null
-  STASHED=1
-fi
-
-restore_stash() {
-  if [ "$STASHED" -eq 1 ]; then
-    git stash pop || true
-  fi
-}
-trap restore_stash EXIT
-
 git pull --ff-only origin main
-chmod +x upgrade-panel9.sh keenetic-awg2.sh nova-update-all.sh add-telegram-keenetic-button.sh keenetic-route-updater.sh install-keenetic-route-updater.sh
-./upgrade-panel9.sh
+chmod +x install-nova11.sh add-telegram-keenetic-button.sh keenetic-route-updater.sh install-keenetic-route-updater.sh
+./install-nova11.sh
 
-# Telegram Keenetic button is a small compatibility patch for existing installs.
-# The web-panel Keenetic menu is now native to app9.py and needs no patch script.
-./add-telegram-keenetic-button.sh
+# Telegram patch is intentionally isolated from the web-panel runtime.
+./add-telegram-keenetic-button.sh || echo 'Telegram patch skipped; web panel is healthy.'
 
-# Restart only the dedicated Keenetic bridge if it already exists.
-# Do not run keenetic-awg2.sh here: reinstalling it is intentionally manual.
+# Never reinstall the dedicated Keenetic bridge during a normal panel update.
 if systemctl list-unit-files --type=service 2>/dev/null | grep -q '^keenetic-awg2.service'; then
   systemctl restart keenetic-awg2.service
 fi
 
-systemctl is-active --quiet awg-quick@awg0
 systemctl is-active --quiet awgpanel
+systemctl is-active --quiet awg-quick@awg0
 
-printf '\nNOVA update completed.\n'
-printf 'Primary awg0: preserved and active.\n'
+printf '\nNOVA 11 update completed.\n'
 printf 'Panel: active.\n'
-if systemctl list-unit-files --type=service 2>/dev/null | grep -q '^keenetic-awg2.service'; then
-  printf 'Keenetic bridge: active.\n'
-else
-  printf 'Keenetic bridge: not installed (manual install available via ./keenetic-awg2.sh).\n'
-fi
-printf 'Keenetic VPS route updater: available in repository.\n'
-printf 'Telegram Keenetic button: installed.\n'
-printf 'Telegram local changes: preserved if they existed before update.\n'
+printf 'Primary awg0: preserved and active.\n'
+printf 'Keenetic bridge: not reinstalled automatically.\n'
+printf 'Keenetic menu: native NOVA 11.\n'
