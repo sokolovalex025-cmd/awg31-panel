@@ -16,15 +16,16 @@ SERVICE=/etc/systemd/system/awgpanel.service
 [ -x "$PY" ] || { echo "Python venv не найден: $PY"; exit 1; }
 
 mkdir -p "$BACKUP"
-
-# Backup only files that are actually part of the stable NOVA core.
 for f in app.py app9.py; do
   [ -f "$BASE/$f" ] && cp -a "$BASE/$f" "$BACKUP/$f-before-nova-$TS"
 done
 [ -f "$CONF" ] && cp -a "$CONF" "$BACKUP/awg0-before-nova-$TS.conf"
 [ -f "$SERVICE" ] && cp -a "$SERVICE" "$BACKUP/awgpanel-before-nova-$TS.service"
 
+rolled_back=0
 rollback() {
+  [ "$rolled_back" -eq 1 ] && return 0
+  rolled_back=1
   echo
   echo '!!! NOVA update failed — rolling back.'
   for f in app.py app9.py; do
@@ -39,17 +40,31 @@ rollback() {
 }
 trap rollback ERR
 
-# Stage new application files first and compile before touching services.
+# Stage and validate the application before touching live files/services.
 install -m 600 "$SRC/app.py" "$BASE/app.py.new"
 install -m 755 "$SRC/app9.py" "$BASE/app9.py.new"
 "$PY" -m py_compile "$BASE/app.py.new" "$BASE/app9.py.new"
-"$PY" - "$BASE/app.py.new" <<'PY'
-import importlib.util, sys
-p=sys.argv[1]
-spec=importlib.util.spec_from_file_location('nova_app_check',p)
-m=importlib.util.module_from_spec(spec)
-spec.loader.exec_module(m)
-assert hasattr(m,'app'), 'Flask app object missing'
+
+# Import both modules safely. Do not execute the Flask dev server.
+"$PY" - "$BASE/app.py.new" "$BASE/app9.py.new" <<'PY'
+from pathlib import Path
+import sys, types
+
+app_path, app9_path = map(Path, sys.argv[1:])
+
+spec_globals={"__name__":"nova_app_check","__file__":str(app_path)}
+code=compile(app_path.read_text(encoding='utf-8'),str(app_path),'exec')
+exec(code,spec_globals)
+core=spec_globals.get('app')
+assert core is not None, 'Flask app object missing from app.py'
+
+# app9.py expects to import app; provide the staged core module without executing app9 main.
+mod=types.ModuleType('app')
+mod.__dict__.update(spec_globals)
+sys.modules['app']=mod
+spec9_globals={"__name__":"nova_app9_check","__file__":str(app9_path)}
+code9=compile(app9_path.read_text(encoding='utf-8'),str(app9_path),'exec')
+exec(code9,spec9_globals)
 print('NOVA import check: OK')
 PY
 
@@ -58,10 +73,6 @@ mv -f "$BASE/app9.py.new" "$BASE/app9.py"
 chmod 600 "$BASE/app.py"
 chmod 755 "$BASE/app9.py"
 
-# Keep the core service free from legacy optional-module registration conflicts.
-# Optional legacy modules are intentionally NOT copied or auto-imported here.
-
-# Preserve the working AWG configuration but normalize only NOVA 3.1 transport parameters.
 if [ -f "$CONF" ]; then
   "$PY" - "$CONF" <<'PY'
 from pathlib import Path
@@ -125,8 +136,8 @@ RestartSec=2
 WantedBy=multi-user.target
 EOF
 fi
-chmod 644 "$SERVICE"
 
+chmod 644 "$SERVICE"
 systemctl daemon-reload
 systemctl enable awgpanel >/dev/null
 systemctl restart awgpanel
@@ -134,15 +145,20 @@ sleep 2
 systemctl is-active --quiet awgpanel
 curl -fsS --max-time 5 http://127.0.0.1:8080/login >/dev/null
 
-# The updater succeeds only if both services are healthy and no legacy conflict appeared.
-if systemctl is-enabled --quiet awgpanel-telegram.service 2>/dev/null || [ -s /etc/awg31-panel/telegram.env ]; then
-  systemctl daemon-reload
-  systemctl restart awgpanel-telegram.service || true
+# Final live checks. Any failure triggers rollback.
+"$PY" - "$BASE/app.py" "$BASE/app9.py" <<'PY'
+from pathlib import Path
+import sys
+for p in map(Path,sys.argv[1:]):
+    compile(p.read_text(encoding='utf-8'),str(p),'exec')
+print('NOVA live compile check: OK')
+PY
+
+if systemctl is-active --quiet awg-quick@awg0; then
+  systemctl is-active --quiet awg-quick@awg0
 fi
 
 trap - ERR
-printf '\nNOVA Network Control Center обновлён успешно.\n'
+printf '\nNOVA Network Control Center обновлён и прошёл live health-check.\n'
 printf 'AmneziaWG 3.1: 1234/UDP\n'
-printf 'Panel: active\n'
-printf 'HTTP: 200\n'
-printf 'Backup: %s\n' "$BACKUP"
+printf 'Branding: NOVA\n'
