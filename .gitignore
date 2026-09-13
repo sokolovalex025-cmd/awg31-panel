@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+
+# Local/runtime data
+*.log
+*.pid
+*.sock
+*.tmp
+*.bak
+*.backup
+*.old
+*.swp
+*.swo
+.DS_Store
+
+# Local secrets and generated VPN material
+.env
+.env.*
+*.key
+*.pem
+*.psk
+*.private
+clients/
+server-config/
+
+# Panel backups / generated state
+backup/
+backups/
+releases/
+release/
+
+# Android/Gradle
+.gradle/
+android/.gradle/
+android/build/
+android/app/build/
+*.apk
+*.aab
+
+# Windows build output
+build/
+dist/
+*.exe
+*.msi
+*.spec
+
+# IDE/editor
+.idea/
+.vscode/
+*.iml
+
+# OS/package manager
+node_modules/
