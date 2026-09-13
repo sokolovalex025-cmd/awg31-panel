@@ -50,7 +50,8 @@ install -m 644 "$SRC/keenetic.py" "$BASE/keenetic.py.new"
 install -m 644 "$SRC/balancer.py" "$BASE/balancer.py.new"
 "$PY" -m py_compile "$BASE/app.py.new" "$BASE/app9.py.new" "$BASE/keenetic.py.new" "$BASE/balancer.py.new"
 
-# Validate every staged Python module without starting the Flask dev server.
+# Validate staged modules. load_dynamic is used because some modules are not
+# standard import targets; a missing loader is now treated as a hard failure.
 "$PY" - "$BASE/app.py.new" "$BASE/app9.py.new" "$BASE/keenetic.py.new" "$BASE/balancer.py.new" <<'PY'
 from pathlib import Path
 import sys, types, importlib.util
@@ -58,15 +59,17 @@ import sys, types, importlib.util
 app_path, app9_path, keenetic_path, balancer_path = map(Path, sys.argv[1:])
 sys.path.insert(0, str(app_path.parent))
 
-kspec=importlib.util.spec_from_file_location('keenetic', keenetic_path)
-kmod=importlib.util.module_from_spec(kspec)
-kspec.loader.exec_module(kmod)
-sys.modules['keenetic']=kmod
+def load_module(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f'Cannot create import spec for {path}')
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    sys.modules[name] = mod
+    return mod
 
-bspec=importlib.util.spec_from_file_location('balancer', balancer_path)
-bmod=importlib.util.module_from_spec(bspec)
-bspec.loader.exec_module(bmod)
-sys.modules['balancer']=bmod
+load_module('keenetic', keenetic_path)
+load_module('balancer', balancer_path)
 
 spec_globals={"__name__":"nova_app_check","__file__":str(app_path)}
 code=compile(app_path.read_text(encoding='utf-8'),str(app_path),'exec')
