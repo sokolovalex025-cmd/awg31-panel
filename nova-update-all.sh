@@ -28,14 +28,11 @@ restore_stash() {
 trap restore_stash EXIT
 
 git pull --ff-only origin main
-chmod +x upgrade-panel9.sh keenetic-awg2.sh nova-update-all.sh add-keenetic-menu.sh add-telegram-keenetic-button.sh keenetic-route-updater.sh install-keenetic-route-updater.sh
+chmod +x upgrade-panel9.sh keenetic-awg2.sh nova-update-all.sh add-telegram-keenetic-button.sh keenetic-route-updater.sh install-keenetic-route-updater.sh
 ./upgrade-panel9.sh
 
-# Add/repair the visible Keenetic entry in the web panel.
-./add-keenetic-menu.sh
-
-# Add/repair the Keenetic button in the Telegram bot.
-# This only edits the bot menu/handler and does not touch awg0 or Telegram credentials.
+# Telegram Keenetic button is a small compatibility patch for existing installs.
+# The web-panel Keenetic menu is now native to app9.py and needs no patch script.
 ./add-telegram-keenetic-button.sh
 
 # Restart only the dedicated Keenetic bridge if it already exists.
