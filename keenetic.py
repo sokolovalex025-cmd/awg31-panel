@@ -83,7 +83,7 @@ def register(core):
 <div class="card"><h3>1. Установка / обновление моста</h3><p class="muted">Скрипт безопасно пересоздаёт только <code>awg-keenetic</code> и не трогает <code>awg0</code>.</p><a class="btn" href="/keenetic/awg2-installer.sh">Скачать установщик</a></div>
 <div class="card"><h3>2. Конфиг для Keenetic</h3><p>Готовый клиентский профиль с AWG 2.0-compatible параметрами.</p><a class="btn" href="/keenetic/awg2-config">Скачать .conf</a><p class="muted">Файл содержит приватный ключ. Не публикуйте его.</p></div>
 <div class="card"><h3>3. Диагностика data-plane</h3><p>Проверяет интерфейс, handshake, передачу, forwarding, NAT и маршрут через WAN.</p><a class="btn" href="/keenetic/diagnostics">Открыть диагностику</a><a class="btn" href="/api/keenetic/status">JSON статус</a></div>
-<div class="card"><h3>4. Full tunnel на Keenetic</h3><p>В peer используйте <code>AllowedIPs = 0.0.0.0/0</code>, а на самом Keenetic назначьте нужные устройства/сеть на профиль политики, использующий AWG-интерфейс. Одного AllowedIPs недостаточно для выборочной policy routing.</p><p class="muted">Если весь LAN должен идти через VPN, назначьте LAN-профиль на VPN. Для выборочной маршрутизации используйте политики KeeneticOS.</p></div>
+<div class="card"><h3>4. Full tunnel на Keenetic</h3><p>В peer используйте <code>AllowedIPs = 0.0.0.0/0</code>, а на самом Keenetic включите использование AWG-интерфейса для доступа в Интернет и назначьте его нужной политике подключения. Одного AllowedIPs недостаточно для выбора LAN-устройств.</p><p class="muted">Если весь LAN должен идти через VPN, используйте VPN-интерфейс как основной путь в политике. Для выборочной маршрутизации создайте отдельную политику и привяжите к ней нужные устройства.</p><a class="btn" href="/keenetic/routing-guide">Открыть инструкцию маршрутизации</a><a class="btn" href="/keenetic/routing-guide.txt">Скачать инструкцию</a></div>
 <div class="card"><h3>5. Выборочная маршрутизация</h3><p>Ниже можно получить справочный список IPv4 CIDR. Это не универсальный импорт: CDN и IP сервисов меняются, поэтому для стабильной выборочной маршрутизации лучше использовать политики KeeneticOS по доменам/IP.</p><form method="post" action="/keenetic/routes"><select name="service">''' + ''.join(f'<option value="{k}">{v[0]}</option>' for k,v in SERVICES.items()) + '''</select> <button class="btn" type="submit">Скачать CIDR</button></form></div>
 </div></body></html>''', mimetype='text/html')
 
@@ -117,6 +117,27 @@ def register(core):
         lines.extend(str(ipaddress.ip_network(cidr, strict=False)) for cidr in ROUTES[service])
         lines.append('')
         return Response('\n'.join(lines), mimetype='text/plain', headers={'Content-Disposition': f'attachment; filename="nova-{service}-routes.txt"', 'Cache-Control': 'no-store'})
+
+    @app.route('/keenetic/routing-guide')
+    def keenetic_routing_guide():
+        if not _logged(core):
+            return redirect('/login')
+        body = '''<div class="hero"><div><div class="eyebrow">NOVA / ROUTING</div><h1>Маршрутизация Keenetic</h1><p>Full-tunnel или выборочная маршрутизация через отдельный AWG bridge.</p></div></div><div class="card"><h2>Full tunnel</h2><ol><li>В peer оставьте <code>AllowedIPs = 0.0.0.0/0</code>.</li><li>В параметрах AWG/WireGuard-интерфейса включите <b>Use for accessing the Internet</b>.</li><li>В Connection Policies создайте/выберите политику с этим AWG-интерфейсом.</li><li>Для всего LAN назначьте эту политику как основную; для отдельных устройств привяжите их только к этой политике.</li><li>DNS укажите, например, <code>1.1.1.1</code>.</li></ol></div><div class="card"><h2>Проверка на VPS</h2><pre>awg show awg-keenetic
+iptables -L FORWARD -n -v --line-numbers
+iptables -t nat -L POSTROUTING -n -v --line-numbers</pre><p>При открытии сайта на выбранном устройстве должны расти счётчики FORWARD и POSTROUTING для <code>10.77.0.0/24</code>, а handshake должен обновляться.</p></div><div class="card"><h2>Если handshake есть, но пакетов нет</h2><p>Проверьте именно Connection Policy на Keenetic: сам <code>AllowedIPs = 0.0.0.0/0</code> не назначает автоматически весь LAN на VPN. Интерфейс должен быть разрешён для выхода в Интернет и выбран в политике.</p></div>'''
+        return core.layout('Keenetic — маршрутизация', body, '/keenetic/routing-guide')
+
+    @app.route('/keenetic/routing-guide.txt')
+    def keenetic_routing_file():
+        if not _logged(core):
+            return redirect('/login')
+        path = '/opt/awg31-panel/keenetic-routing-guide.txt'
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = f.read()
+        except OSError:
+            return Response('Routing guide is not installed. Update the NOVA panel from GitHub first.', status=404, mimetype='text/plain')
+        return Response(data, mimetype='text/plain', headers={'Content-Disposition': 'attachment; filename="nova-keenetic-routing-guide.txt"', 'Cache-Control': 'no-store'})
 
     def _status():
         link = _run('ip', 'link', 'show', iface)
