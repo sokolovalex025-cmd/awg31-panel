@@ -15,6 +15,7 @@ SERVICE=/etc/systemd/system/awgpanel.service
 [ -f "$SRC/app9.py" ] || { echo 'app9.py не найден.'; exit 1; }
 [ -f "$SRC/keenetic.py" ] || { echo 'keenetic.py не найден.'; exit 1; }
 [ -f "$SRC/balancer.py" ] || { echo 'balancer.py не найден.'; exit 1; }
+[ -f "$SRC/keenetic-routing-guide.txt" ] || { echo 'keenetic-routing-guide.txt не найден.'; exit 1; }
 [ -x "$PY" ] || { echo "Python venv не найден: $PY"; exit 1; }
 
 mkdir -p "$BACKUP"
@@ -99,6 +100,7 @@ mv -f "$BASE/app.py.new" "$BASE/app.py"
 mv -f "$BASE/app9.py.new" "$BASE/app9.py"
 mv -f "$BASE/keenetic.py.new" "$BASE/keenetic.py"
 mv -f "$BASE/balancer.py.new" "$BASE/balancer.py"
+install -m 644 "$SRC/keenetic-routing-guide.txt" "$BASE/keenetic-routing-guide.txt"
 chmod 600 "$BASE/app.py"
 chmod 755 "$BASE/app9.py"
 chmod 644 "$BASE/keenetic.py" "$BASE/balancer.py"
@@ -193,6 +195,6 @@ trap - ERR
 printf '\nNOVA Network Control Center обновлён и прошёл live health-check.\n'
 printf 'AmneziaWG 3.1: 1234/UDP\n'
 printf 'Branding: NOVA\n'
-printf 'Keenetic toolkit: AWG 2.0-compatible bridge + diagnostics\n'
+printf 'Keenetic toolkit: AWG 2.0-compatible bridge + diagnostics + routing guide\n'
 printf 'Balancer module: deployed\n'
 printf 'Primary awg0: preserved\n'
