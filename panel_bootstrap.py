@@ -31,5 +31,9 @@ try:
     nova14_theme.apply(nova11)
 except Exception:
     pass
+try:
+    import nova_mobile_diagnostics
+except Exception:
+    nova_mobile_diagnostics = None
 
 nova11.core.app.run(host='0.0.0.0',port=8080)
