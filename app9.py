@@ -15,29 +15,26 @@ try:
 except Exception:
     balancer_provision=None
 
-# NOVA sidebar: scrollbar on the RIGHT; server status is in normal flow so it
-# never overlays the navigation.
+# Optional KeeneticOS toolkit. It must never prevent the main panel from starting.
+try:
+    import keenetic
+    keenetic.register(core)
+except Exception:
+    keenetic=None
+
 core.CSS += '''<style>
 .sidebar{overflow-y:auto!important;overflow-x:hidden!important;direction:ltr!important;scrollbar-width:thin;scrollbar-color:#33445c transparent;padding-bottom:18px}
 .sidebar>*{direction:ltr!important}
 .sidebar .server{position:static!important;left:auto!important;right:auto!important;bottom:auto!important;margin:18px 0 0!important}
-.sidebar::-webkit-scrollbar{width:7px}
-.sidebar::-webkit-scrollbar-track{background:transparent}
-.sidebar::-webkit-scrollbar-thumb{background:#33445c;border-radius:10px;border:2px solid transparent;background-clip:padding-box}
-.sidebar::-webkit-scrollbar-thumb:hover{background:#4f8cff;background-clip:padding-box}
-.nova-status{display:flex;gap:10px;align-items:center;padding:13px 15px;margin:0 0 14px;border:1px solid #1c5548;border-radius:12px;background:#0b241e}
-.nova-status .pulse{width:9px;height:9px;border-radius:50%;background:#37d6a3;box-shadow:0 0 14px #37d6a399}
-.nova-status.bad{border-color:#60303b;background:#26131a}.nova-status.bad .pulse{background:#ff647c;box-shadow:0 0 14px #ff647c88}
-.nova-status b{font-size:13px}.nova-status small{display:block;color:#8290a3;margin-top:3px}
-.diag-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px}.diag-item{padding:13px;border:1px solid #202c3b;border-radius:11px;background:#101925}.diag-item b{display:block;margin-bottom:4px}.diag-item span{font-size:12px;color:#8290a3}
-@media(max-width:760px){.diag-grid{grid-template-columns:1fr}}
+.sidebar::-webkit-scrollbar{width:7px}.sidebar::-webkit-scrollbar-track{background:transparent}.sidebar::-webkit-scrollbar-thumb{background:#33445c;border-radius:10px;border:2px solid transparent;background-clip:padding-box}.sidebar::-webkit-scrollbar-thumb:hover{background:#4f8cff;background-clip:padding-box}
+.nova-status{display:flex;gap:10px;align-items:center;padding:13px 15px;margin:0 0 14px;border:1px solid #1c5548;border-radius:12px;background:#0b241e}.nova-status .pulse{width:9px;height:9px;border-radius:50%;background:#37d6a3;box-shadow:0 0 14px #37d6a399}.nova-status.bad{border-color:#60303b;background:#26131a}.nova-status.bad .pulse{background:#ff647c;box-shadow:0 0 14px #ff647c88}.nova-status b{font-size:13px}.nova-status small{display:block;color:#8290a3;margin-top:3px}
+.diag-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px}.diag-item{padding:13px;border:1px solid #202c3b;border-radius:11px;background:#101925}.diag-item b{display:block;margin-bottom:4px}.diag-item span{font-size:12px;color:#8290a3}@media(max-width:760px){.diag-grid{grid-template-columns:1fr}}
 </style>'''
 
 def _strong_mobile_status():
     try:
         c=core.cfg(); required=['Jc','Jmin','Jmax','S1','S2','S3','S4','H1','H2','H3','H4']
-        present=all(c.get(k) for k in required)
-        live=core.cmd('awg','show','awg0').stdout or ''
+        present=all(c.get(k) for k in required); live=core.cmd('awg','show','awg0').stdout or ''
         live_ok=all(x in live for x in ('jc:','jmin:','jmax:','s1:','s2:','s3:','s4:'))
         return {'active':bool(core.online() and present and live_ok),'mtu':c.get('MTU','—'),'jc':c.get('Jc','—'),'jmin':c.get('Jmin','—'),'jmax':c.get('Jmax','—'),'s1':c.get('S1','—'),'s2':c.get('S2','—'),'s3':c.get('S3','—'),'s4':c.get('S4','—'),'h1':c.get('H1','—'),'h2':c.get('H2','—'),'h3':c.get('H3','—'),'h4':c.get('H4','—')}
     except Exception:return {'active':False}
@@ -59,10 +56,7 @@ def _find_endpoint(path):
 
 def _enhanced_obfuscation():
     s=_strong_mobile_status(); state='ACTIVE' if s.get('active') else 'INACTIVE'; cls='' if s.get('active') else 'bad'
-    body=f'''<div class="hero"><div><div class="eyebrow">SECURITY PROFILE</div><h1>Strong Mobile</h1><p>Live AmneziaWG obfuscation profile for mobile networks.</p></div></div>
-<div class="nova-status {cls}"><div class="pulse"></div><div><b>Strong Mobile: {state}</b><small>Проверено по работающему awg0 и текущему конфигу</small></div></div>
-<div class="card"><div class="toolbar"><h2>Параметры профиля</h2><span class="badge {'on' if s.get('active') else 'off'}">{state}</span></div><div class="kv"><div><span>MTU</span><b>{s.get('mtu','—')}</b></div><div><span>Jc</span><b>{s.get('jc','—')}</b></div><div><span>Jmin / Jmax</span><b>{s.get('jmin','—')} / {s.get('jmax','—')}</b></div><div><span>S1 / S2</span><b>{s.get('s1','—')} / {s.get('s2','—')}</b></div><div><span>S3 / S4</span><b>{s.get('s3','—')} / {s.get('s4','—')}</b></div><div><span>H1 / H2 / H3 / H4</span><b>{s.get('h1','—')} / {s.get('h2','—')} / {s.get('h3','—')} / {s.get('h4','—')}</b></div></div></div>
-<div class="card" style="margin-top:14px"><div class="toolbar"><h2>Быстрая диагностика</h2><a class="btn secondary" href="/diagnostics">Открыть диагностику</a></div><div class="diag-grid"><div class="diag-item"><b>AWG интерфейс</b><span>{'Работает' if core.online() else 'Не работает'}</span></div><div class="diag-item"><b>UDP {core.cfg().get('ListenPort','1234')}</b><span>Проверяется через слушающий сокет</span></div><div class="diag-item"><b>Junk / S-параметры</b><span>{'Применены' if s.get('active') else 'Требуют проверки'}</span></div><div class="diag-item"><b>Header Protection</b><span>{'H1–H4 заданы' if all(s.get(k) not in (None,'—','') for k in ('h1','h2','h3','h4')) else 'Не задано'}</span></div></div></div>'''
+    body=f'''<div class="hero"><div><div class="eyebrow">SECURITY PROFILE</div><h1>Strong Mobile</h1><p>Live AmneziaWG obfuscation profile for mobile networks.</p></div></div><div class="nova-status {cls}"><div class="pulse"></div><div><b>Strong Mobile: {state}</b><small>Проверено по работающему awg0 и текущему конфигу</small></div></div><div class="card"><div class="toolbar"><h2>Параметры профиля</h2><span class="badge {'on' if s.get('active') else 'off'}">{state}</span></div><div class="kv"><div><span>MTU</span><b>{s.get('mtu','—')}</b></div><div><span>Jc</span><b>{s.get('jc','—')}</b></div><div><span>Jmin / Jmax</span><b>{s.get('jmin','—')} / {s.get('jmax','—')}</b></div><div><span>S1 / S2</span><b>{s.get('s1','—')} / {s.get('s2','—')}</b></div><div><span>S3 / S4</span><b>{s.get('s3','—')} / {s.get('s4','—')}</b></div><div><span>H1 / H2 / H3 / H4</span><b>{s.get('h1','—')} / {s.get('h2','—')} / {s.get('h3','—')} / {s.get('h4','—')}</b></div></div></div><div class="card" style="margin-top:14px"><div class="toolbar"><h2>Быстрая диагностика</h2><a class="btn secondary" href="/diagnostics">Открыть диагностику</a></div><div class="diag-grid"><div class="diag-item"><b>AWG интерфейс</b><span>{'Работает' if core.online() else 'Не работает'}</span></div><div class="diag-item"><b>UDP {core.cfg().get('ListenPort','1234')}</b><span>Проверяется через слушающий сокет</span></div><div class="diag-item"><b>Junk / S-параметры</b><span>{'Применены' if s.get('active') else 'Требуют проверки'}</span></div><div class="diag-item"><b>Header Protection</b><span>{'H1–H4 заданы' if all(s.get(k) not in (None,'—','') for k in ('h1','h2','h3','h4')) else 'Не задано'}</span></div></div></div>'''
     return core.layout('Strong Mobile',body,'/obfuscation')
 
 def _enhanced_diagnostics():
