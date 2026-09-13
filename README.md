@@ -9,6 +9,8 @@
 - NOVA Dashboard и Live Traffic;
 - управление клиентами AWG 3.1;
 - профиль Strong Mobile;
+- **AWG Cluster Balancer** — распределение новых клиентов между несколькими VPS;
+- health-check, latency, weighted least-load и автоматический failover для новых выдач;
 - Security Center и журнал аудита;
 - Firewall Center;
 - диагностика AWG, systemd, сети и HTTP;
@@ -17,6 +19,53 @@
 - Telegram Bot;
 - Android APK, Windows x64 и исходник iOS;
 - адаптивный интерфейс с мобильным выезжающим меню.
+
+## Балансировка AWG 3.1
+
+Балансировщик работает на уровне **выдачи клиентских конфигураций**, а не путём переноса существующего UDP-сеанса между VPS. Поэтому активная сессия клиента не разрывается из-за перераспределения.
+
+Схема:
+
+```text
+NOVA Panel
+    |
+    +-- NL-01  (AWG 3.1)
+    +-- NL-02  (AWG 3.1)
+    +-- DE-01  (AWG 3.1)
+```
+
+Для каждого узла используется NOVA node agent на TCP `9090`. Health API необходимо ограничить firewall-правилом только по IP управляющей панели.
+
+### Включение на управляющей панели
+
+```bash
+cd /root/awg31-panel
+git pull --ff-only origin main
+chmod +x install-balancer.sh
+sudo ./install-balancer.sh
+```
+
+После этого в NOVA появится раздел **Балансировка**.
+
+### Установка node agent на текущем VPS
+
+```bash
+chmod +x install-local-balancer-node.sh
+sudo ./install-local-balancer-node.sh
+```
+
+### Установка node agent на дополнительном VPS
+
+Склонируй репозиторий или скачай скрипт и передай тот же секрет, который создал `install-balancer.sh` на управляющей панели:
+
+```bash
+chmod +x install-balancer-node.sh
+sudo ./install-balancer-node.sh 'BALANCER_TOKEN_ОТ_ПАНЕЛИ'
+```
+
+После установки добавь VPS через **Панель → Балансировка → Добавить сервер**. Вес `100` — стандартная ёмкость; более мощному VPS можно дать больший вес.
+
+> Важно: TCP `9090` не должен быть открыт для всего интернета. Разреши его только с IP управляющей панели.
 
 ## AmneziaWG 3.1 Strong Mobile
 
@@ -59,7 +108,7 @@ sudo ./upgrade-panel9.sh
 
 ## Security
 
-NOVA использует случайный `AWGPANEL_SECRET`, безопасные параметры session cookie, ограничение попыток входа, аудит авторизации и security HTTP headers.
+NOVA использует случайный `AWGPANEL_SECRET`, безопасные параметры session cookie, ограничение попыток входа, аудит авторизации и security HTTP headers. Балансировщик использует отдельный секрет для node API.
 
 ## Клиенты
 
