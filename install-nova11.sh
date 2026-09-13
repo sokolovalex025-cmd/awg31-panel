@@ -5,7 +5,7 @@ REPO_URL="${REPO_URL:-https://github.com/sokolovalex025-cmd/awg31-panel.git}"; R
 PANEL_SERVICE="/etc/systemd/system/awgpanel.service"; TG_SERVICE="/etc/systemd/system/awgpanel-telegram.service"; NET_SERVICE="/etc/systemd/system/awg31-network.service"
 command -v awg >/dev/null 2>&1 || { echo 'AmneziaWG tool "awg" was not found.'; exit 2; }
 apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get install -y git python3 python3-venv python3-pip curl qrencode iptables nginx
+DEBIAN_FRONTEND=noninteractive apt-get install -y git python3 python3-venv python3-pip curl qrencode iptables nginx dnsutils
 if [ -d "$REPO_DIR/.git" ]; then git -C "$REPO_DIR" fetch origin main; git -C "$REPO_DIR" reset --hard origin/main; else rm -rf "$REPO_DIR"; git clone --depth 1 "$REPO_URL" "$REPO_DIR"; fi
 python3 -m venv "$REPO_DIR/venv"; "$REPO_DIR/venv/bin/pip" install --upgrade pip; "$REPO_DIR/venv/bin/pip" install Flask 'qrcode[pil]'
 mkdir -p "$BASE/backups"
@@ -67,4 +67,4 @@ systemctl daemon-reload; systemctl enable awg31-network >/dev/null; systemctl re
 systemctl enable awgpanel >/dev/null; systemctl restart awgpanel; sleep 2; systemctl is-active --quiet awgpanel; curl -fsS --max-time 5 http://127.0.0.1:8080/login >/dev/null
 systemctl enable awgpanel-telegram >/dev/null; systemctl restart awgpanel-telegram || true
 systemctl enable nginx >/dev/null; systemctl restart nginx; systemctl is-active --quiet nginx
-printf '\nNOVA 11 installed successfully.\n'; printf 'Panel: active (awgpanel)\n'; printf 'Telegram: runtime installed (awgpanel-telegram)\n'; printf 'Network: persistent AWG client NAT + IPv4 forwarding\n'; printf 'Client DNS: 1.1.1.1,8.8.8.8 (old 10.66.66.1 default migrated)\n'; printf 'Mobile diagnostics: /mobile-diagnostics and /api/mobile-diagnostics\n'; printf 'Sidebar: NOVA14 scrollbar + status card flow fix\n'; printf 'Nginx: reverse proxy :80 -> 127.0.0.1:8080\n'; printf 'Domains: /domains + Cloudflare Registrar + DNS + HTTPS\n'; printf 'AWG interface/config: preserved\n'; printf 'Keenetic: native NOVA menu + /keenetic\n'; printf 'Health: /api/nova/health\n'
+printf '\nNOVA 11 installed successfully.\n'; printf 'Panel: active (awgpanel)\n'; printf 'Telegram: runtime installed (awgpanel-telegram)\n'; printf 'Network: persistent AWG client NAT + IPv4 forwarding\n'; printf 'Client DNS: 1.1.1.1,8.8.8.8 (old 10.66.66.1 default migrated)\n'; printf 'Mobile diagnostics: /mobile-diagnostics and /api/mobile-diagnostics\n'; printf 'Sidebar: NOVA14 scrollbar + status card flow fix\n'; printf 'Nginx: reverse proxy :80 -> 127.0.0.1:8080\n'; printf 'Domains: existing registrar DNS + Nginx + Let's Encrypt at /domains\n'; printf 'AWG interface/config: preserved\n'; printf 'Keenetic: native NOVA menu + /keenetic\n'; printf 'Health: /api/nova/health\n'
