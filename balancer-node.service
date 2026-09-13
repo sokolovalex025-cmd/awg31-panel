@@ -1,0 +1,20 @@
+[Unit]
+Description=NOVA AWG Balancer Node Health API
+After=network-online.target awg-quick@awg0.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/awg31-panel
+Environment=BALANCER_NODE_PORT=9090
+ExecStart=/usr/bin/python3 /opt/awg31-panel/balancer-node.py
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
