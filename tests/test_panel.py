@@ -22,7 +22,7 @@ def test_login_page_smoke():
 
 def test_app9_import_smoke():
     mod = app9
-    assert mod.core.VERSION == "9.2"
+    assert mod.core.VERSION == "11.0"
     assert mod.core.app.url_map._rules_by_endpoint["health9"][0].rule == "/api/health9"
     assert mod.core.app.url_map._rules_by_endpoint["diagnostics"][0].rule == "/diagnostics"
 
