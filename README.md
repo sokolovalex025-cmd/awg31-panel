@@ -1,30 +1,27 @@
 # NOVA 11 Network Control Center
 
-Профессиональная web-панель управления **AmneziaWG 3.1** с единым command-center интерфейсом NOVA 11.
+Профессиональная web-панель управления **AmneziaWG 3.1** с command-center интерфейсом NOVA 11.
 
-## NOVA 11
-
-Новая UI-система построена вокруг тёмного command-center дизайна: стеклянная навигация, спокойная surface-шкала, чёткая типографика, компактные KPI, адаптивность и отдельные состояния для ошибок/диагностики. Keenetic является штатным пунктом меню, а не HTML-патчем.
+## Возможности
 
 - NOVA 11 Dashboard и Live Traffic;
-- управление клиентами AWG 3.1;
-- профиль Strong Mobile;
-- диагностика AWG, сети, UDP и handshake;
-- Firewall / Network инструменты;
-- резервное копирование;
-- **AWG Cluster Balancer** для распределения новых выдач между VPS;
-- **Keenetic AWG bridge** и routing toolkit;
-- VPS route feed для Keenetic;
-- **Telegram Bot** для выдачи и продления VPN-профилей;
+- управление клиентами AWG 3.1 и QR/.conf профилями;
+- Strong Mobile и мобильная диагностика;
+- **NOVA Doctor**: проверка AWG, NAT, forwarding, firewall, DNS и сервисов;
+- безопасное **«Исправить всё»** с предварительным backup;
+- NOVA Shield / Resilience;
+- автоматический watchdog для AWG, панели и nginx;
+- резервные копии;
+- **AWG Cluster Balancer** для новых клиентских выдач между VPS;
+- Keenetic AWG bridge и routing toolkit;
+- Telegram Bot для выдачи и продления VPN-профилей;
 - NaïveProxy / Caddy integration;
 - Android, Windows и iOS исходники;
 - адаптивный интерфейс для ПК и мобильных устройств.
 
-## Чистая установка на новый VPS
+## Установка
 
-Рекомендуемый порядок: Ubuntu 24.04 LTS → AmneziaWG 3.1 → NOVA 11.
-
-Сначала установите AmneziaWG 3.1 и убедитесь, что команда `awg` доступна. После этого:
+Рекомендуется Ubuntu 24.04 LTS + AmneziaWG 3.1. Сначала убедитесь, что команда `awg` доступна.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sokolovalex025-cmd/awg31-panel/main/install-nova11.sh -o /root/install-nova11.sh
@@ -32,96 +29,95 @@ chmod +x /root/install-nova11.sh
 /root/install-nova11.sh
 ```
 
-Установщик:
-
-- клонирует актуальный `main`;
-- создаёт Python venv;
-- устанавливает Flask и QR-зависимости;
-- создаёт базу панели при первом запуске;
-- создаёт отдельный `AWGPANEL_SECRET`;
-- запускает `awgpanel` через `panel_bootstrap.py → nova11.py`;
-- **не перезаписывает `/etc/amnezia/amneziawg/awg0.conf`**;
-- не переустанавливает Keenetic bridge автоматически.
-
-После установки откройте панель на `:8080`.
-
-## Производственный AWG 3.1
-
-Основной интерфейс `awg0` остаётся отдельным от Keenetic bridge.
-
-- UDP: `1234`
-- MTU: `1280`
-- Jc/Jmin/Jmax: `4/40/120`
-- S1-S4: `16/24/16/32`
-- H1-H4: `1/2/3/4`
-- RandomTrailers: `on`
-- DisableCookies: `on`
-
-Обновление NOVA не должно менять существующие peer-конфигурации и ключи без явного действия администратора.
-
-## Обновление существующей панели
-
-Для уже работающей установки сохраняется старый updater для совместимости, но новые чистые установки используют NOVA 11 runtime:
+Для уже установленной NOVA:
 
 ```bash
 cd /root/awg31-panel
-git pull --ff-only origin main
-chmod +x install-nova11.sh
-sudo ./install-nova11.sh
+git fetch origin main
+git reset --hard origin/main
+chmod +x update-panel.sh
+./update-panel.sh
 ```
 
-## Keenetic
+Updater устанавливает зависимости, синхронизирует файлы, выполняет проверку Python/shell, применяет согласованный профиль AWG 3.1 с backup/rollback, включает watchdog и запускает полный `nova-verify.sh`.
 
-В NOVA 11 **🛜 Настроить Keenetic** является штатным пунктом навигации. Дополнительно доступна плавающая кнопка Keenetic.
+## AWG 3.1
 
-Раздел содержит:
+`nova_awg31_fix.py` приводит интерфейс `awg0` к согласованному профилю и сохраняет существующие `ListenPort` и `MTU`. При отсутствии `HeaderProtectionKey` создаётся новый секрет. Секрет никогда не выводится в лог.
 
-- отдельный AWG bridge `awg-keenetic`;
-- конфигурацию клиента;
-- диагностику data-plane;
-- routing guide;
-- VPS route feed;
-- route updater для Entware/KeeneticOS.
+Профиль NOVA:
 
-## Балансировка AWG
+- Jc/Jmin/Jmax: `4/40/120`
+- S1-S4: `16/16/16/16`
+- H1-H4: `1/2/3/4`
+- ContentPaddingAddition: `0-64`
+- RandomTrailers: `on`
+- DisableCookies: `on`
+- RekeyAfterTime: `120-180`
+- RekeyTimeout: `3-8`
+- RejectAfterTime: `150-210`
+- KeepaliveTimeout: `8-15`
+- MaxHandshakeAttempts: `8-15`
 
-Балансировщик распределяет **новые клиентские выдачи**, а не переносит активные UDP-сеансы.
+После миграции клиенты должны получить свежие конфигурации, соответствующие серверному профилю.
 
-```bash
-chmod +x install-balancer.sh
-sudo ./install-balancer.sh
-```
+## NOVA Doctor
 
-Node API должен быть закрыт от общего интернета и разрешён только управляющей панели.
+Открыть `/doctor`.
+
+Проверяются:
+
+- команда и сервис AmneziaWG;
+- `awg0`;
+- panel/nginx;
+- IPv4 forwarding;
+- WAN route;
+- NAT и FORWARD;
+- HeaderProtectionKey;
+- DNS.
+
+Кнопка **«Исправить всё»** сначала создаёт backup, затем применяет сетевой fix и AWG 3.1 guard, перезапускает необходимые сервисы и выполняет повторную диагностику.
+
+## Watchdog
+
+`nova-watchdog.timer` запускает проверку раз в минуту. Он перезапускает только неработающие сервисы и использует AWG 3.1 guard только если `awg0` не читается.
+
+## Балансировка
+
+Балансировщик распределяет **новые выдачи**, а не переносит существующие UDP-сеансы. Node API должен быть доступен только управляющей панели. Для подключения VPS используется `/balancer/provision`; SSH-ключ остаётся на основной панели.
 
 ## Telegram
 
-`install-telegram-full-v2.sh` устанавливает Telegram Bot для выдачи, просмотра и продления AWG-профилей. Секреты Telegram хранятся только на VPS и не должны попадать в Git.
+Telegram credentials хранятся на VPS и не должны попадать в Git. Бот поддерживает выдачу, просмотр и продление AWG-профилей.
 
 ## Безопасность
 
-- `AWGPANEL_SECRET` создаётся случайно и хранится вне репозитория;
-- Telegram credentials хранятся на VPS;
-- клиентские приватные ключи не должны попадать в Git;
-- node API балансировщика должен быть ограничен firewall;
-- производственный `awg0` и Keenetic bridge используют отдельные интерфейсы.
+- `AWGPANEL_SECRET` хранится вне Git с правами `600`;
+- приватные ключи клиентов не должны попадать в Git;
+- backup API не экспортирует приватный AWG key;
+- balancer node защищён bearer-токеном;
+- порт node API следует разрешать firewall только с IP основной панели;
+- для публичной панели рекомендуется HTTPS через доменный менеджер.
 
 ## Основные файлы
 
 ```text
 app.py                    ядро web-панели
 nova11.py                 NOVA 11 UI/runtime
-panel_bootstrap.py        чистая инициализация SQLite + запуск NOVA 11
-app9.py                   предыдущий совместимый runtime
-keenetic.py               Keenetic toolkit
+panel_bootstrap.py        SQLite + запуск NOVA 11
+nova_awg31_fix.py         AWG 3.1 migration/guard
+nova_mobile_diagnostics.py мобильная диагностика
+nova_resilience.py        Doctor + resilience + backups
+nova_shield.py            connectivity health
+nova-watchdog.sh          автоматическое восстановление сервисов
+nova-watchdog.service     watchdog service
+nova-watchdog.timer       запуск watchdog раз в минуту
 balancer.py               AWG cluster balancer
 balancer-node.py          node agent
+balancer_provision.py     SSH provisioning
 telegram_bot.py           Telegram Bot
-upgrade-panel9.sh         legacy-safe updater
-nova-update-all.sh        единое обновление существующей установки
-install-nova11.sh         чистая установка NOVA 11
-keenetic-awg2.sh          отдельный Keenetic bridge
-keenetic-route-updater.sh route updater
+keenetic.py               Keenetic toolkit
+nova-network-fix.sh       NAT/forwarding/firewall fix
+nova-verify.sh            production verification
+update-panel.sh           one-command updater
 ```
-
-Исторические repair/patch/legacy installer скрипты удалены из основного workflow, чтобы проект оставался компактным и обслуживаемым.
