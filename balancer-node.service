@@ -7,6 +7,7 @@ Wants=network-online.target
 Type=simple
 User=root
 WorkingDirectory=/opt/awg31-panel
+EnvironmentFile=-/etc/awg31-panel/balancer-node.env
 Environment=BALANCER_NODE_PORT=9090
 ExecStart=/usr/bin/python3 /opt/awg31-panel/balancer-node.py
 Restart=always
