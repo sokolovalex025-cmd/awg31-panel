@@ -22,8 +22,10 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install dependencies
-        run: python -m pip install --upgrade pip Flask 'qrcode[pil]'
+        run: python -m pip install --upgrade pip Flask 'qrcode[pil]' pytest
       - name: Compile Python modules
-        run: python -m py_compile app.py app9.py advanced_panel.py naiveproxy_panel.py telegram_bot.py system_panel.py mobile_nav.py security_hardening.py
+        run: python -m py_compile app.py app9.py nova11.py panel_bootstrap.py nova12_theme.py nova13_theme.py nova14_theme.py nova15_theme.py nova16_server_card_fix.py nova_awg31_fix.py antiblock.py nova_shield.py nova_resilience.py domain_manager.py naiveproxy_panel.py telegram_bot.py telegram_runner.py telegram_ui.py telegram_delete.py telegram_payments.py system_panel.py mobile_nav.py security_hardening.py keenetic.py balancer.py balancer_provision.py nova_mobile_diagnostics.py
       - name: Import modules
-        run: python -c "import app; import security_hardening; import mobile_nav; import app9; print('AWG Panel Python modules OK')"
+        run: python -c "import app; import app9; import nova11; import panel_bootstrap; import nova_awg31_fix; print('NOVA Python modules OK')"
+      - name: Run tests
+        run: pytest -q
