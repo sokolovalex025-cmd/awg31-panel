@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """NOVA AWG 3.1 consistency and migration guard.
 
-Keeps one shared HeaderProtectionKey on awg0 and makes the generated client
+Keeps one shared HeaderProtectionKey on awg0 and makes generated client
 configs inherit the exact live server parameters through app.cfg().
 """
 from pathlib import Path
@@ -15,27 +15,14 @@ CONF_CANDIDATES = (
 BACKUP_DIR = Path('/opt/awg31-panel/backups')
 
 PARAMS = {
-    'ListenPort': '1234',
-    'MTU': '1280',
-    'Jc': '4',
-    'Jmin': '40',
-    'Jmax': '120',
-    'S1': '16',
-    'S2': '24',
-    'S3': '16',
-    'S4': '16',
-    'H1': '1',
-    'H2': '2',
-    'H3': '3',
-    'H4': '4',
+    'Jc': '4', 'Jmin': '40', 'Jmax': '120',
+    'S1': '16', 'S2': '24', 'S3': '16', 'S4': '16',
+    'H1': '1', 'H2': '2', 'H3': '3', 'H4': '4',
     'ContentPaddingAddition': '0-64',
-    'RekeyAfterTime': '120-180',
-    'RekeyTimeout': '3-8',
-    'RejectAfterTime': '150-210',
-    'KeepaliveTimeout': '8-15',
+    'RekeyAfterTime': '120-180', 'RekeyTimeout': '3-8',
+    'RejectAfterTime': '150-210', 'KeepaliveTimeout': '8-15',
     'MaxHandshakeAttempts': '8-15',
-    'RandomTrailers': 'on',
-    'DisableCookies': 'on',
+    'RandomTrailers': 'on', 'DisableCookies': 'on',
 }
 
 
@@ -57,11 +44,19 @@ def genkey():
     return r.stdout.strip()
 
 
+def parse_interface(text):
+    cfg = {}
+    for line in text.split('[Peer]', 1)[0].splitlines():
+        if '=' in line and not line.lstrip().startswith('#'):
+            k, v = line.split('=', 1)
+            cfg[k.strip()] = v.strip()
+    return cfg
+
+
 def set_interface_params(text, values):
     head, sep, peers = text.partition('[Peer]')
     lines = head.splitlines()
-    out = []
-    seen = set()
+    out, seen = [], set()
     for line in lines:
         stripped = line.strip()
         if '=' not in stripped or stripped.startswith('#'):
@@ -85,17 +80,15 @@ def set_interface_params(text, values):
 def migrate():
     path = conf_path()
     original = path.read_text(errors='replace')
+    existing = parse_interface(original)
     stamp = time.strftime('%Y%m%d-%H%M%S')
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
     backup = BACKUP_DIR / f'awg0-pre-31-{stamp}.conf'
     backup.write_text(original)
 
     values = dict(PARAMS)
-    existing = {}
-    for line in original.split('[Peer]', 1)[0].splitlines():
-        if '=' in line and not line.lstrip().startswith('#'):
-            k, v = line.split('=', 1)
-            existing[k.strip()] = v.strip()
+    values['ListenPort'] = existing.get('ListenPort', '1234')
+    values['MTU'] = existing.get('MTU', '1280')
     values['HeaderProtectionKey'] = existing.get('HeaderProtectionKey') or genkey()
 
     candidate = set_interface_params(original, values)
@@ -106,24 +99,16 @@ def migrate():
         run('systemctl', 'restart', 'awg-quick@awg0')
         raise RuntimeError('AWG 3.1 migration was rejected; original config restored.\n' + (restart.stderr or restart.stdout).strip())
 
-    show = run('awg', 'show', 'awg0')
-    if show.returncode:
+    if run('awg', 'show', 'awg0').returncode:
         path.write_text(original)
         run('systemctl', 'restart', 'awg-quick@awg0')
         raise RuntimeError('awg0 did not come back after migration; original config restored.')
-
     return path, backup, values
 
 
 def check():
     path = conf_path()
-    text = path.read_text(errors='replace')
-    interface = text.split('[Peer]', 1)[0]
-    cfg = {}
-    for line in interface.splitlines():
-        if '=' in line and not line.lstrip().startswith('#'):
-            k, v = line.split('=', 1)
-            cfg[k.strip()] = v.strip()
+    cfg = parse_interface(path.read_text(errors='replace'))
     required = ['HeaderProtectionKey', 'Jc', 'Jmin', 'Jmax', 'S1', 'S2', 'S3', 'S4', 'H1', 'H2', 'H3', 'H4', 'RandomTrailers']
     missing = [k for k in required if not cfg.get(k)]
     if missing:
@@ -150,7 +135,7 @@ if __name__ == '__main__':
     else:
         path, backup, values = migrate()
         check()
-        print(f'NOVA AWG 3.1 migration: PASS')
+        print('NOVA AWG 3.1 migration: PASS')
         print(f'Config: {path}')
         print(f'Backup: {backup}')
         print('HeaderProtectionKey: present')
