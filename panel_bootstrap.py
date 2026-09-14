@@ -28,8 +28,8 @@ try:
     import nova16_server_card_fix; nova16_server_card_fix.apply(nova11)
 except Exception as e: print('NOVA 16 server-card fix disabled:',e,flush=True)
 try:
-    import nova_scroll_buttons; nova_scroll_buttons.apply(nova11)
-except Exception as e: print('NOVA scroll controls disabled:',e,flush=True)
+    import nova_scroll_buttons; nova_scroll_buttons.apply(nova11); print('NOVA Sidebar Controls: UP/DOWN',flush=True)
+except Exception as e: print('NOVA Sidebar Controls disabled:',e,flush=True)
 try: import nova_mobile_diagnostics
 except Exception: nova_mobile_diagnostics=None
 try: import antiblock; antiblock.apply(nova11.core.app)
