@@ -1,4 +1,4 @@
-"""NOVA 16 final UI hotfix: remove legacy server card and force sidebar scroll.
+"""NOVA 16 final UI hotfix: remove legacy server card and force page/sidebar scrollbars.
 
 Presentation-only. Does not modify AWG configuration or runtime state.
 """
@@ -6,6 +6,34 @@ import re
 
 CSS = r"""
 <style id="nova16-final-ui">
+/* Always keep a real document scrollbar on desktop and mobile browsers. */
+html{
+  min-height:100%!important;
+  height:auto!important;
+  overflow-y:scroll!important;
+  overflow-x:hidden!important;
+  scrollbar-gutter:stable!important;
+  scrollbar-width:auto!important;
+  scrollbar-color:#687994 #080c13!important;
+}
+body{
+  min-height:100vh!important;
+  height:auto!important;
+  overflow-y:scroll!important;
+  overflow-x:hidden!important;
+  scrollbar-gutter:stable!important;
+  scrollbar-width:auto!important;
+  scrollbar-color:#687994 #080c13!important;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar{width:13px!important;display:block!important}
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track{background:#080c13!important;border-left:1px solid rgba(255,255,255,.05)!important}
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb{background:#687994!important;border:3px solid #080c13!important;border-radius:10px!important;min-height:55px!important}
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover{background:#8293b1!important}
+
 .sidebar{
   height:100vh!important;
   max-height:100vh!important;
