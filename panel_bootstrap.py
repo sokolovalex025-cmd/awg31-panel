@@ -37,4 +37,10 @@ try: import nova_resilience; nova_resilience.apply(nova11.core.app)
 except Exception as e: print('NOVA Resilience disabled:',e,flush=True)
 try: import domain_manager; domain_manager.apply(nova11.core.app)
 except Exception as e: print('NOVA domain manager disabled:',e,flush=True)
+try:
+    import nova_awg31_fix
+    nova_awg31_fix.check()
+    print('NOVA AWG 3.1 consistency: PASS', flush=True)
+except Exception as e:
+    print('NOVA AWG 3.1 consistency check: FAIL:', e, flush=True)
 nova11.core.app.run(host='0.0.0.0',port=8080)
