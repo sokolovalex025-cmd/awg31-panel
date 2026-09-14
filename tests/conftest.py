@@ -1,14 +1,7 @@
-import importlib
-import os
 import pytest
 
-os.environ.setdefault("AWGPANEL_SECRET", "test-secret")
-
 @pytest.fixture(autouse=True)
-def reset_panel_modules():
-    # app9 registers Flask routes at import time. Ensure each test gets a fresh
-    # app module so a previous test request cannot lock Flask setup.
-    for name in ("app9",):
-        importlib.sys.modules.pop(name, None)
+def panel_test_marker():
+    # Keep the fixture layer intentionally side-effect free. Flask route setup
+    # is handled by importing app9 before the first request in test_panel.py.
     yield
-    importlib.sys.modules.pop("app9", None)
