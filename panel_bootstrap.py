@@ -32,6 +32,9 @@ try:
 except Exception as e: print('NOVA Sidebar Controls disabled:',e,flush=True)
 try: import nova_mobile_diagnostics
 except Exception: nova_mobile_diagnostics=None
+try:
+    import nova_diagnostics; nova_diagnostics.apply(nova11); print('NOVA Diagnostics: FULL',flush=True)
+except Exception as e: print('NOVA Diagnostics disabled:',e,flush=True)
 try: import antiblock; antiblock.apply(nova11.core.app)
 except Exception as e: print('NOVA AntiBlock disabled:',e,flush=True)
 try: import nova_shield; nova_shield.apply(nova11.core.app)
