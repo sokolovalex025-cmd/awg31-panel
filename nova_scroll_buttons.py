@@ -1,81 +1,76 @@
-"""NOVA sidebar arrows: hard-wired scrolling controller.
+"""NOVA sidebar arrows - direct, self-contained controller.
 
-The controls are deliberately handled at document capture level so they work
-with either NOVA arrow implementation and with nested sidebar scroll areas.
+The controls live inside the sidebar so no overlay can steal their pointer
+ events. Scrolling is performed directly on the sidebar element.
 """
 
 CSS = r'''<style id="nova-scroll-buttons-css">
-.nova-scroll-controls{position:fixed!important;z-index:2147483647!important;display:flex!important;flex-direction:column!important;gap:6px!important;width:38px!important;pointer-events:auto!important}
-.nova-scroll-controls button,.nova16-nav-buttons button{pointer-events:auto!important;touch-action:manipulation!important;user-select:none!important}
+/* Disable the older duplicate controller. */
+.nova16-nav-buttons{display:none!important;pointer-events:none!important}
+.nova-scroll-controls{position:fixed!important;left:0;bottom:18px;z-index:2147483647!important;display:flex!important;flex-direction:column!important;gap:7px!important;width:278px!important;padding:0 14px!important;pointer-events:none!important}
+.nova-scroll-controls button{pointer-events:auto!important;display:flex!important;align-items:center!important;justify-content:center!important;width:44px!important;height:38px!important;margin-left:210px!important;padding:0!important;border:1px solid rgba(255,255,255,.22)!important;border-radius:10px!important;background:#121b28!important;color:#fff!important;font:900 20px/1 Arial,sans-serif!important;cursor:pointer!important;touch-action:manipulation!important;user-select:none!important;-webkit-tap-highlight-color:transparent!important;box-shadow:0 6px 20px rgba(0,0,0,.55)!important;opacity:1!important;visibility:visible!important}
+.nova-scroll-controls button:hover{background:#2a3b54!important}
+.nova-scroll-controls button:active{background:#405674!important;transform:scale(.96)!important}
+@media(max-width:760px){.nova-scroll-controls{width:278px!important}.nova-scroll-controls button{margin-left:210px!important}}
 </style>'''
 
 JS = r'''<script id="nova-scroll-buttons-js">
 (function(){
  'use strict';
- function sidebar(){return document.querySelector('.sidebar');}
- function scrollTarget(side){
+ function findSide(){return document.querySelector('.sidebar');}
+ function getScroller(side){
    if(!side)return null;
-   if(side.scrollHeight>side.clientHeight+2)return side;
-   var all=side.querySelectorAll('*'),best=null,bestArea=0;
-   for(var i=0;i<all.length;i++){
-    var e=all[i],s=getComputedStyle(e);
-    if(e.scrollHeight>e.clientHeight+2 && /(auto|scroll|overlay)/.test(s.overflowY)){
-     var area=e.clientWidth*e.clientHeight;
-     if(area>bestArea){best=e;bestArea=area;}
-    }
+   if(side.scrollHeight-side.clientHeight>2)return side;
+   var nodes=side.querySelectorAll('*');
+   for(var i=0;i<nodes.length;i++){
+     var n=nodes[i],s=getComputedStyle(n);
+     if(n.scrollHeight-n.clientHeight>2 && /(auto|scroll|overlay)/.test(s.overflowY))return n;
    }
-   return best||document.scrollingElement||document.documentElement;
+   return side;
  }
- function doScroll(dir){
-   var side=sidebar(),sc=scrollTarget(side);
-   if(!sc)return;
-   var amount=Math.max(180,Math.round((sc.clientHeight||window.innerHeight)*.68));
+ function scrollMenu(dir){
+   var side=findSide(),sc=getScroller(side);
+   if(!sc)return false;
+   var max=Math.max(0,sc.scrollHeight-sc.clientHeight);
+   var step=Math.max(180,Math.floor((sc.clientHeight||window.innerHeight)*0.70));
    var old=sc.scrollTop;
-   sc.scrollTop=Math.max(0,Math.min(sc.scrollHeight-sc.clientHeight,old+dir*amount));
-   if(sc.scrollTop===old && sc!==side && side){
-    old=side.scrollTop;
-    side.scrollTop=Math.max(0,Math.min(side.scrollHeight-side.clientHeight,old+dir*amount));
+   var next=Math.max(0,Math.min(max,old+dir*step));
+   sc.scrollTop=next;
+   /* Force the browser to apply the position even when smooth scrolling was
+      configured elsewhere in the stylesheet. */
+   if(sc.scrollTop===old){
+     sc.style.scrollBehavior='auto';
+     sc.scrollTop=next;
    }
-   if(sc===document.documentElement||sc===document.body){window.scrollBy(0,dir*amount);}
+   return sc.scrollTop!==old || next===old;
  }
- function arrowDir(el){
-   if(!el)return 0;
-   var t=((el.getAttribute('aria-label')||'')+' '+(el.title||'')+' '+(el.textContent||'')).toLowerCase();
-   if(t.indexOf('вниз')>=0||t.indexOf('down')>=0||t.indexOf('▼')>=0)return 1;
-   if(t.indexOf('вверх')>=0||t.indexOf('up')>=0||t.indexOf('▲')>=0)return -1;
-   return 0;
- }
- function handle(e){
-   var el=e.target&&e.target.closest?e.target.closest('.nova-scroll-controls button,.nova16-nav-buttons button'):null;
-   if(!el)return;
-   var d=arrowDir(el);if(!d)return;
-   e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();
-   doScroll(d);
- }
- document.addEventListener('click',handle,true);
- document.addEventListener('pointerup',function(e){
-   var el=e.target&&e.target.closest?e.target.closest('.nova-scroll-controls button,.nova16-nav-buttons button'):null;
-   if(el){e.preventDefault();e.stopPropagation();}
- },true);
- document.addEventListener('touchend',handle,true);
- function init(){
-  var side=sidebar();if(!side)return;
-  if(!document.querySelector('.nova-scroll-controls')){
-   var box=document.createElement('div');box.className='nova-scroll-controls';box.setAttribute('aria-label','Навигация меню');
-   box.innerHTML='<button type="button" title="Вверх" aria-label="Вверх">▲</button><button type="button" title="Вниз" aria-label="Вниз">▼</button>';
+ function make(){
+   var side=findSide();
+   if(!side)return;
+   /* Remove every previous instance, including the legacy NOVA16 one. */
+   document.querySelectorAll('.nova-scroll-controls').forEach(function(x){x.remove();});
+   document.querySelectorAll('.nova16-nav-buttons').forEach(function(x){x.remove();});
+   var box=document.createElement('div');box.className='nova-scroll-controls';
+   var up=document.createElement('button'),down=document.createElement('button');
+   up.type='button';down.type='button';up.textContent='▲';down.textContent='▼';
+   up.setAttribute('aria-label','Меню вверх');down.setAttribute('aria-label','Меню вниз');
+   up.title='Прокрутить меню вверх';down.title='Прокрутить меню вниз';
+   box.appendChild(up);box.appendChild(down);
    document.body.appendChild(box);
-  }
-  function place(){
-   var r=side.getBoundingClientRect();
-   var boxes=document.querySelectorAll('.nova-scroll-controls');
-   for(var i=0;i<boxes.length;i++){
-    boxes[i].style.display='flex';boxes[i].style.left=Math.max(4,Math.round(r.right-44))+'px';boxes[i].style.top=Math.max(70,Math.round(window.innerHeight-104))+'px';
+   function go(dir,e){
+     if(e){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();}
+     scrollMenu(dir);
+     return false;
    }
-  }
-  place();window.addEventListener('resize',place,{passive:true});setTimeout(place,500);setTimeout(place,1500);
+   up.onclick=function(e){return go(-1,e);};
+   down.onclick=function(e){return go(1,e);};
+   up.onpointerdown=function(e){e.preventDefault();};
+   down.onpointerdown=function(e){e.preventDefault();};
+   up.ontouchstart=function(e){e.preventDefault();scrollMenu(-1);};
+   down.ontouchstart=function(e){e.preventDefault();scrollMenu(1);};
  }
- if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
- setTimeout(init,700);setTimeout(init,1800);
+ function start(){setTimeout(make,50);setTimeout(make,500);setTimeout(make,1500);}
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
 })();
 </script>'''
 
