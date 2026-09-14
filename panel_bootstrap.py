@@ -35,12 +35,13 @@ try: import nova_shield; nova_shield.apply(nova11.core.app)
 except Exception as e: print('NOVA Shield disabled:',e,flush=True)
 try: import nova_resilience; nova_resilience.apply(nova11.core.app)
 except Exception as e: print('NOVA Resilience disabled:',e,flush=True)
+try:
+    import nova_doctor_ui; nova_doctor_ui.apply(nova11)
+except Exception as e: print('NOVA Doctor UI disabled:',e,flush=True)
 try: import domain_manager; domain_manager.apply(nova11.core.app)
 except Exception as e: print('NOVA domain manager disabled:',e,flush=True)
 try: import nova_awg31_fix; nova_awg31_fix.check(); print('NOVA AWG 3.1 consistency: PASS',flush=True)
 except Exception as e: print('NOVA AWG 3.1 consistency check: FAIL:',e,flush=True)
-# Doctor is registered after the base runtime and resilience layer so it can use
-# the final authenticated layout and all existing repair helpers.
 try:
     import nova_resilience
     print('NOVA Doctor: /doctor and /api/doctor ready',flush=True)
