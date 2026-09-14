@@ -13,12 +13,12 @@ def run(*args):
     except Exception:return None
 
 def authorized():
-    supplied=request.headers.get('Authorization',''); return bool(TOKEN) and hmac.compare_digest(supplied,'Bearer '+TOKEN)
+    supplied=request.headers.get('Authorization','');return bool(TOKEN) and hmac.compare_digest(supplied,'Bearer '+TOKEN)
 
 def metrics():
-    r=run('awg','show','awg0','dump'); clients=rx=tx=0
+    r=run('awg','show','awg0','dump');clients=rx=tx=0
     if r and r.returncode==0:
-        lines=r.stdout.strip().splitlines(); clients=max(0,len(lines)-1)
+        lines=r.stdout.strip().splitlines();clients=max(0,len(lines)-1)
         for line in lines[1:]:
             p=line.split('\t')
             if len(p)>=7:
@@ -29,10 +29,17 @@ def metrics():
     return clients,rx,tx
 
 def server_public():
-    r=run('awg','show','awg0','public-key'); return r.stdout.strip() if r else ''
+    r=run('awg','show','awg0','public-key');return r.stdout.strip() if r and r.returncode==0 else ''
+
+def listen_port():
+    try:
+        for line in CONF.read_text(errors='replace').split('[Peer]',1)[0].splitlines():
+            if line.strip().startswith('ListenPort') and '=' in line:return int(line.split('=',1)[1].strip())
+    except Exception:pass
+    return 1234
 
 def restart():
-    r=run('systemctl','restart','awg-quick@awg0'); return bool(r and r.returncode==0)
+    r=run('systemctl','restart','awg-quick@awg0');return bool(r and r.returncode==0)
 
 @app.before_request
 def auth():
@@ -43,10 +50,10 @@ def auth():
 def health():
     r=run('systemctl','is-active','--quiet','awg-quick@awg0')
     if not r or r.returncode!=0:return jsonify({'ok':False,'status':'down'}),503
-    clients,rx,tx=metrics();return jsonify({'ok':True,'status':'online','clients':clients,'rx':rx,'tx':tx,'ts':int(time.time())})
+    clients,rx,tx=metrics();return jsonify({'ok':True,'status':'online','clients':clients,'rx':rx,'tx':tx,'listen_port':listen_port(),'ts':int(time.time())})
 
 @app.get('/info')
-def info():return jsonify({'ok':True,'public_key':server_public(),'listen_port':1234})
+def info():return jsonify({'ok':True,'public_key':server_public(),'listen_port':listen_port()})
 
 @app.post('/client/add')
 def client_add():
