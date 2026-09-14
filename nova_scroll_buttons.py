@@ -1,40 +1,120 @@
-"""NOVA sidebar navigation buttons.
+"""NOVA sidebar navigation controls.
 
-Adds explicit UP/DOWN controls to the fixed sidebar so navigation does not
-rely on a visible native scrollbar. Presentation-only.
+Adds permanent UP/DOWN buttons to the actual sidebar edge.  The controls
+work with the sidebar itself and also detect nested scroll containers, so the
+UI does not depend on a visible native scrollbar.
 """
 
 CSS = r'''<style id="nova-scroll-buttons-css">
-.nova-scroll-controls{position:fixed;left:calc(278px - 48px);bottom:18px;z-index:2147483001;display:flex;flex-direction:column;gap:6px}
-.nova-scroll-controls button{width:34px!important;height:34px!important;padding:0!important;border:1px solid rgba(255,255,255,.16)!important;border-radius:9px!important;background:rgba(18,27,40,.96)!important;color:#cbd6e5!important;box-shadow:0 8px 24px rgba(0,0,0,.35)!important;font-size:17px!important;line-height:1!important;cursor:pointer!important}
-.nova-scroll-controls button:hover{background:#26364d!important;color:#fff!important}
-.nova-scroll-controls button:disabled{opacity:.3!important;cursor:default!important}
-@media(max-width:1050px){.nova-scroll-controls{left:calc(245px - 48px)}}
-@media(max-width:760px){.nova-scroll-controls{left:calc(278px - 48px)}}
+.nova-scroll-controls{
+ position:fixed!important;
+ z-index:2147483647!important;
+ display:flex!important;
+ flex-direction:column!important;
+ gap:6px!important;
+ width:38px!important;
+ pointer-events:auto!important;
+}
+.nova-scroll-controls button{
+ display:flex!important;
+ align-items:center!important;
+ justify-content:center!important;
+ width:38px!important;
+ height:38px!important;
+ min-width:38px!important;
+ min-height:38px!important;
+ margin:0!important;
+ padding:0!important;
+ border:1px solid rgba(255,255,255,.20)!important;
+ border-radius:10px!important;
+ background:rgba(18,27,40,.98)!important;
+ color:#e7edf7!important;
+ box-shadow:0 8px 28px rgba(0,0,0,.48)!important;
+ font:900 18px/1 Arial,sans-serif!important;
+ cursor:pointer!important;
+ opacity:1!important;
+ visibility:visible!important;
+}
+.nova-scroll-controls button:hover{background:#2a3b54!important;color:#fff!important;transform:scale(1.04)!important}
+.nova-scroll-controls button:active{transform:scale(.97)!important}
+.nova-scroll-controls button:disabled{opacity:.45!important;cursor:pointer!important}
+@media(max-width:760px){.nova-scroll-controls{z-index:2147483647!important}}
 </style>'''
 
 JS = r'''<script id="nova-scroll-buttons-js">
 (function(){
+ 'use strict';
  function init(){
   var side=document.querySelector('.sidebar');
-  if(!side || document.querySelector('.nova-scroll-controls')) return;
-  var box=document.createElement('div');
-  box.className='nova-scroll-controls';
-  box.innerHTML='<button type="button" title="Вверх" aria-label="Вверх">▲</button><button type="button" title="Вниз" aria-label="Вниз">▼</button>';
-  document.body.appendChild(box);
-  var up=box.children[0],down=box.children[1];
-  function state(){
-   var max=Math.max(0,side.scrollHeight-side.clientHeight);
-   up.disabled=side.scrollTop<=2;
-   down.disabled=side.scrollTop>=max-2;
+  if(!side) return;
+  var box=document.querySelector('.nova-scroll-controls');
+  if(!box){
+   box=document.createElement('div');
+   box.className='nova-scroll-controls';
+   box.setAttribute('aria-label','Навигация меню');
+   box.innerHTML='<button type="button" title="Прокрутить меню вверх" aria-label="Вверх">▲</button><button type="button" title="Прокрутить меню вниз" aria-label="Вниз">▼</button>';
+   document.body.appendChild(box);
   }
-  up.addEventListener('click',function(){side.scrollBy({top:-Math.max(180,side.clientHeight*.78),behavior:'smooth'});});
-  down.addEventListener('click',function(){side.scrollBy({top:Math.max(180,side.clientHeight*.78),behavior:'smooth'});});
+  var up=box.children[0], down=box.children[1];
+
+  function scrollParent(){
+   var e=side;
+   while(e && e!==document.body){
+    if(e.scrollHeight>e.clientHeight+4 && getComputedStyle(e).overflowY!=='hidden') return e;
+    e=e.parentElement;
+   }
+   if(document.documentElement.scrollHeight>document.documentElement.clientHeight+4) return document.documentElement;
+   return side;
+  }
+
+  function move(dir){
+   var sc=scrollParent();
+   var amount=Math.max(180,Math.round((sc.clientHeight||window.innerHeight)*.72));
+   if(sc===document.documentElement || sc===document.body){
+    window.scrollBy({top:dir*amount,behavior:'smooth'});
+   }else{
+    sc.scrollBy({top:dir*amount,behavior:'smooth'});
+   }
+   setTimeout(state,350);
+  }
+
+  function state(){
+   var sc=scrollParent();
+   var max=Math.max(0,sc.scrollHeight-sc.clientHeight);
+   up.disabled=sc.scrollTop<=2;
+   down.disabled=sc.scrollTop>=max-2;
+   up.style.visibility='visible';
+   down.style.visibility='visible';
+   place();
+  }
+
+  function place(){
+   var r=side.getBoundingClientRect();
+   var x=Math.round(r.right-44);
+   var y=Math.max(70,Math.round(window.innerHeight-104));
+   if(r.width<=0 || r.right<=0 || r.left>=window.innerWidth){
+    box.style.display='none';
+    return;
+   }
+   box.style.display='flex';
+   box.style.left=Math.max(4,x)+'px';
+   box.style.top=y+'px';
+  }
+
+  up.onclick=function(e){e.preventDefault();move(-1);};
+  down.onclick=function(e){e.preventDefault();move(1);};
+  window.addEventListener('resize',place,{passive:true});
+  window.addEventListener('scroll',place,{passive:true});
   side.addEventListener('scroll',state,{passive:true});
-  window.addEventListener('resize',state,{passive:true});
+  place();
   state();
+  setTimeout(state,300);
+  setTimeout(state,1200);
  }
- if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init);
+ else init();
+ setTimeout(init,800);
+ setTimeout(init,2000);
 })();
 </script>'''
 
@@ -45,9 +125,14 @@ def apply(nova):
         try:
             if response.content_type and response.content_type.startswith('text/html'):
                 html=response.get_data(as_text=True)
-                payload=CSS+JS
-                if 'nova-scroll-buttons-css' not in html and '</head>' in html:
-                    html=html.replace('</head>',payload+'</head>',1)
+                if 'nova-scroll-buttons-css' not in html:
+                    payload=CSS+JS
+                    if '</head>' in html:
+                        html=html.replace('</head>',payload+'</head>',1)
+                    elif '</body>' in html:
+                        html=html.replace('</body>',payload+'</body>',1)
+                    else:
+                        html+=payload
                     response.set_data(html)
         except Exception:
             pass
