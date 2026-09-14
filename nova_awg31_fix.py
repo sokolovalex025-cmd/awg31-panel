@@ -16,7 +16,9 @@ BACKUP_DIR = Path('/opt/awg31-panel/backups')
 
 PARAMS = {
     'Jc': '4', 'Jmin': '40', 'Jmax': '120',
-    'S1': '16', 'S2': '24', 'S3': '16', 'S4': '16',
+    # With RandomTrailers enabled, keep S1-S4 identical as recommended by upstream.
+    # S4=16 also keeps outer UDP packets conservative for mobile paths.
+    'S1': '16', 'S2': '16', 'S3': '16', 'S4': '16',
     'H1': '1', 'H2': '2', 'H3': '3', 'H4': '4',
     'ContentPaddingAddition': '0-64',
     'RekeyAfterTime': '120-180', 'RekeyTimeout': '3-8',
@@ -115,6 +117,8 @@ def check():
         raise RuntimeError('Missing AWG 3.1 parameters: ' + ', '.join(missing))
     if cfg.get('RandomTrailers', '').lower() != 'on':
         raise RuntimeError('RandomTrailers must be on for the NOVA 3.1 profile')
+    if len({cfg[k] for k in ('S1', 'S2', 'S3', 'S4')}) != 1:
+        raise RuntimeError('S1-S4 must match for the NOVA RandomTrailers profile')
     if any(int(cfg[k]) < 12 for k in ('S1', 'S2', 'S3', 'S4')):
         raise RuntimeError('S1-S4 must be >= 12 when HeaderProtectionKey is enabled')
     show = run('awg', 'show', 'awg0')
