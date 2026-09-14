@@ -1,8 +1,4 @@
-"""NOVA sidebar navigation - dedicated scroll viewport.
-
-The sidebar has one real scroll owner. Arrow controls, mouse wheel, keyboard
-navigation and the active-link position all operate on the same viewport.
-"""
+"""NOVA sidebar navigation - dedicated scroll viewport."""
 
 CSS = r'''<style id="nova-scroll-buttons-css">
 .sidebar{overflow:hidden!important;height:100vh!important;max-height:100vh!important;}
@@ -39,6 +35,22 @@ JS = r'''<script id="nova-scroll-buttons-js">
    side.appendChild(viewport);
 
    document.querySelectorAll('.nova-scroll-controls,.nova16-nav-buttons,.nova16-scrollbar').forEach(function(x){x.remove();});
+
+   /* Add NOVA Doctor to the real navigation without changing backend routes. */
+   var nav=content.querySelector('.nav');
+   if(nav && !nav.querySelector('a[href="/doctor"]')){
+     var links=nav.querySelectorAll('a');
+     var diagnostics=null;
+     links.forEach(function(a){if(a.getAttribute('href')==='/diagnostics')diagnostics=a;});
+     if(diagnostics){
+       var doctor=document.createElement('a');
+       doctor.href='/doctor';
+       doctor.innerHTML='<i>🩺</i>NOVA Doctor';
+       doctor.title='Автоматическая проверка и исправление сервера';
+       if(location.pathname==='/doctor')doctor.className='active';
+       diagnostics.parentNode.insertBefore(doctor,diagnostics.nextSibling);
+     }
+   }
 
    var controls=document.createElement('div');
    controls.className='nova-scroll-controls';
