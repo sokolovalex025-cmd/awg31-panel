@@ -9,7 +9,7 @@ bad(){ printf '  [FAIL] %s\n' "$*"; FAIL=1; }
 check(){ if "$@" >/dev/null 2>&1; then ok "$*"; else bad "$*"; fi; }
 
 echo '=== NOVA MAX verification ==='
-for f in app.py nova11.py panel_bootstrap.py nova14_theme.py antiblock.py nova_shield.py nova_resilience.py domain_manager.py telegram_bot.py telegram_runner.py keenetic.py balancer.py nova_mobile_diagnostics.py nova-max-backup.sh nova-migrate.sh; do
+for f in app.py nova11.py panel_bootstrap.py nova14_theme.py antiblock.py nova_shield.py nova_resilience.py domain_manager.py telegram_bot.py telegram_runner.py keenetic.py balancer.py nova_mobile_diagnostics.py nova_awg31_fix.py nova-max-backup.sh nova-migrate.sh; do
   [ -f "$BASE/$f" ] && ok "file $f" || bad "missing $BASE/$f"
 done
 
@@ -32,12 +32,19 @@ check curl -fsS --max-time 8 http://127.0.0.1:8080/login
 check curl -fsS --max-time 8 http://127.0.0.1/login
 nginx -t >/dev/null 2>&1 && ok 'nginx configuration' || bad 'nginx configuration'
 
+if "$PY" "$BASE/nova_awg31_fix.py" check >/tmp/nova-awg31-check.out 2>&1; then
+  ok 'AWG 3.1 live parameters'
+else
+  bad "AWG 3.1 live parameters: $(tr '\n' ' ' </tmp/nova-awg31-check.out | cut -c1-240)"
+fi
+
 if systemctl is-enabled --quiet awgpanel.service; then ok 'awgpanel enabled'; else bad 'awgpanel not enabled'; fi
 if systemctl is-enabled --quiet nginx.service; then ok 'nginx enabled'; else bad 'nginx not enabled'; fi
 
 if grep -q "nova_resilience" "$BASE/panel_bootstrap.py"; then ok 'resilience registered'; else bad 'resilience not registered'; fi
 if grep -q "nova_shield" "$BASE/panel_bootstrap.py"; then ok 'shield registered'; else bad 'shield not registered'; fi
 if grep -q "domain_manager" "$BASE/panel_bootstrap.py"; then ok 'domain manager registered'; else bad 'domain manager not registered'; fi
+if grep -q "nova_awg31_fix" "$BASE/panel_bootstrap.py"; then ok 'AWG 3.1 guard registered'; else bad 'AWG 3.1 guard not registered'; fi
 
 printf '\n=== Result ===\n'
 if [ "$FAIL" -eq 0 ]; then
