@@ -43,6 +43,12 @@ try:
 except Exception as e: print('NOVA Doctor UI disabled:',e,flush=True)
 try: import domain_manager; domain_manager.apply(nova11.core.app)
 except Exception as e: print('NOVA domain manager disabled:',e,flush=True)
+try:
+    import nova_command_center
+    nova_command_center.apply(nova11)
+    print('NOVA Command Center: READY',flush=True)
+except Exception as e:
+    print('NOVA Command Center disabled:',e,flush=True)
 try: import nova_awg31_fix; nova_awg31_fix.check(); print('NOVA AWG 3.1 consistency: PASS',flush=True)
 except Exception as e: print('NOVA AWG 3.1 consistency check: FAIL:',e,flush=True)
 try:
