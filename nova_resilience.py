@@ -37,8 +37,7 @@ def doctor():
   add('NAT',cmd('iptables','-t','nat','-C','POSTROUTING','-s','10.66.66.0/24','-o',wan,'-j','MASQUERADE')[0]==0,'MASQUERADE present','Run nova-network-fix.sh.')
   add('AWG forwarding',cmd('iptables','-C','FORWARD','-i','awg0','-o',wan,'-s','10.66.66.0/24','-j','ACCEPT')[0]==0,'FORWARD rule present','Run nova-network-fix.sh.')
  conf=Path('/etc/amnezia/amneziawg/awg0.conf') if Path('/etc/amnezia/amneziawg/awg0.conf').exists() else Path('/etc/wireguard/awg0.conf');text=conf.read_text(errors='replace') if conf.exists() else ''
- key=next((x.split('=',1)[1].strip() for x in text.splitlines() if x.strip().startswith('HeaderProtectionKey') and '=' in x), '')
- add('HeaderProtectionKey',bool(key),'present' if key else 'missing','Run nova_awg31_fix.py.')
+ key=next((x.split('=',1)[1].strip() for x in text.splitlines() if x.strip().startswith('HeaderProtectionKey') and '=' in x),'');add('HeaderProtectionKey',bool(key),'present' if key else 'missing','Run nova_awg31_fix.py.')
  rc,out=cmd('getent','hosts','example.com');add('DNS',rc==0,out,'Check resolver/network.')
  return {'ok':all(x['ok'] for x in tests),'score':round(sum(x['ok'] for x in tests)*100/len(tests)) if tests else 0,'results':tests,'timestamp':int(time.time())}
 def make_backup():
@@ -51,7 +50,7 @@ def make_backup():
   if p.exists():shutil.copy2(p,root/dst);files.append(dst)
  manifest={'created':ts,'files':files,'note':'Private AWG keys are not exported by the API backup.'};(root/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2));digest=hashlib.sha256((root/'manifest.json').read_bytes()).hexdigest();(root/'SHA256').write_text(digest+'  manifest.json\n');return {'ok':True,'path':str(root),'files':files,'sha256':digest}
 def auto_fix():
- steps=[{'step':'backup','ok':make_backup()['ok']}];py=str(REPO/'venv/bin/python') if (REPO/'venv/bin/python').exists() else 'python3'
+ backup=make_backup();steps=[{'step':'backup','ok':backup['ok']}];py=str(REPO/'venv/bin/python') if (REPO/'venv/bin/python').exists() else 'python3'
  for label,args in [('network',[str(BASE/'nova-network-fix.sh')]),('awg31',[py,str(BASE/'nova_awg31_fix.py')])]:
   rc,out=cmd(*args,timeout=45);steps.append({'step':label,'ok':rc==0,'detail':out[-1000:]})
  for svc in ('awg31-network.service','awgpanel.service','nginx.service'):
@@ -62,7 +61,7 @@ def apply(app):
  def doctor_page():
   d=doctor();rows=''.join(f"<div class='notice {'good' if x['ok'] else 'badbox'}'><b>{'✓' if x['ok'] else '✕'} {x['name']}</b><div style='margin-top:5px'>{x['detail']}</div>{'' if x['ok'] else '<div class=muted>'+x['hint']+'</div>'}</div>" for x in d['results'])
   body=f'''<div class="hero"><div><div class="eyebrow">NOVA DOCTOR</div><h1>NOVA Doctor</h1><p>AWG 3.1, сеть, firewall, DNS и сервисы.</p></div><button onclick="fixall()">🛠 Исправить всё</button></div><div class="card"><div class="notice {'good' if d['ok'] else 'badbox'}"><b>{'✓ Сервер здоров' if d['ok'] else '⚠ Требуется внимание'}</b><div class="muted">Health Score: {d['score']}%</div></div>{rows}<pre id="result" class="code" style="display:none"></pre></div><script>async function fixall(){{if(!confirm('Создать backup и применить безопасные исправления?'))return;let r=await fetch('/api/doctor/fix',{{method:'POST'}});document.getElementById('result').style.display='block';document.getElementById('result').textContent=JSON.stringify(await r.json(),null,2);setTimeout(()=>location.reload(),1200)}}</script>'''
-  return __import__('app').layout('NOVA Doctor',body,'/doctor')
+  import nova11;return nova11.core.layout('NOVA Doctor',body,'/doctor')
  @app.get('/api/doctor')
  def doctor_api():return jsonify(doctor())
  @app.post('/api/doctor/fix')
