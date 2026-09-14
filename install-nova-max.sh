@@ -12,6 +12,8 @@ if [ -d "$REPO_DIR/.git" ]; then git -C "$REPO_DIR" fetch origin main; git -C "$
 python3 -m venv "$REPO_DIR/venv"; "$REPO_DIR/venv/bin/pip" install --upgrade pip; "$REPO_DIR/venv/bin/pip" install Flask 'qrcode[pil]' pytest
 for f in app.py nova11.py panel_bootstrap.py nova12_theme.py nova13_theme.py nova14_theme.py nova15_theme.py nova16_server_card_fix.py nova_awg31_fix.py antiblock.py nova_shield.py nova_resilience.py domain_manager.py telegram_ui.py telegram_bot.py telegram_runner.py telegram_delete.py keenetic.py balancer.py balancer_provision.py keenetic-routing-guide.txt background.svg nova-network-fix.sh nova_mobile_diagnostics.py nova-max-backup.sh nova-migrate.sh nova-verify.sh nova-watchdog.sh nova-watchdog.service nova-watchdog.timer; do [ -f "$REPO_DIR/$f" ] && install -m 644 "$REPO_DIR/$f" "$BASE/$f"; done
 chmod 755 "$BASE"/*.sh "$BASE"/nova_awg31_fix.py "$BASE"/panel_bootstrap.py "$BASE"/nova-watchdog.sh 2>/dev/null || true
+install -m 644 "$BASE/nova-watchdog.service" /etc/systemd/system/nova-watchdog.service
+install -m 644 "$BASE/nova-watchdog.timer" /etc/systemd/system/nova-watchdog.timer
 SECRET_DIR=/etc/awg31-panel; SECRET_FILE="$SECRET_DIR/panel-secret"; mkdir -p "$SECRET_DIR"; chmod 700 "$SECRET_DIR"
 if [ ! -s "$SECRET_FILE" ]; then umask 077; "$REPO_DIR/venv/bin/python" -c 'import secrets;print(secrets.token_hex(32))' > "$SECRET_FILE"; fi
 chmod 600 "$SECRET_FILE"; SECRET=$(cat "$SECRET_FILE")
