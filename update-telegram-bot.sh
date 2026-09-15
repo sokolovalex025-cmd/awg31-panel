@@ -4,6 +4,7 @@ BASE=/opt/awg31-panel
 SERVICE=awgpanel-telegram.service
 BOT="$BASE/telegram_bot.py"
 V2="$BASE/telegram_bot_v2.py"
+WELCOME="$BASE/telegram_welcome.py"
 ENV=/etc/awg31-panel/telegram.env
 DROPIN="/etc/systemd/system/${SERVICE}.d/override.conf"
 REPO_RAW="https://raw.githubusercontent.com/sokolovalex025-cmd/awg31-panel/telegram-v2"
@@ -15,12 +16,15 @@ backup="$BASE/telegram-backup-$stamp"
 mkdir -p "$backup"
 [ -f "$BOT" ] && cp -a "$BOT" "$backup/telegram_bot.py"
 [ -f "$V2" ] && cp -a "$V2" "$backup/telegram_bot_v2.py"
+[ -f "$WELCOME" ] && cp -a "$WELCOME" "$backup/telegram_welcome.py"
 
 echo '[1/6] Downloading enhanced bot...'
 curl -fsSL --retry 3 "$REPO_RAW/telegram_bot_v2.py" -o "$V2.new"
-python3 -m py_compile "$V2.new"
+curl -fsSL --retry 3 "$REPO_RAW/telegram_welcome.py" -o "$WELCOME.new"
+python3 -m py_compile "$V2.new" "$WELCOME.new"
 mv "$V2.new" "$V2"
-chmod 750 "$V2"
+mv "$WELCOME.new" "$WELCOME"
+chmod 750 "$V2" "$WELCOME"
 
 echo '[2/6] Preparing configuration...'
 mkdir -p /etc/awg31-panel
@@ -42,14 +46,14 @@ echo '[3/6] Installing systemd override...'
 cat > "$DROPIN" <<EOF
 [Service]
 ExecStart=
-ExecStart=/usr/bin/python3 $V2
+ExecStart=/usr/bin/python3 $WELCOME
 Restart=always
 RestartSec=3
 EOF
 systemctl daemon-reload
 
 echo '[4/6] Checking Python files...'
-python3 -m py_compile "$V2"
+python3 -m py_compile "$V2" "$WELCOME"
 python3 -m py_compile "$BOT"
 
 echo '[5/6] Restarting bot...'
@@ -63,7 +67,12 @@ echo "Service: $(systemctl is-active "$SERVICE" || true)"
 systemctl --no-pager --full status "$SERVICE" | sed -n '1,18p' || true
 
 echo
-echo 'Commands:'
+echo 'Telegram:'
+echo '  /start        — приветственное меню NOVA'
+echo '  /menu         — открыть меню'
+echo '  /vpn          — получить VPN'
+echo '  /myvpn        — мой VPN'
+echo '  /renew        — продлить VPN'
 echo '  /admin        — admin menu'
 echo '  /status       — VPS/AWG/bot status'
 echo '  /routes       — NOVA feed status'
