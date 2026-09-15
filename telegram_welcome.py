@@ -4,6 +4,8 @@ import html
 import json
 import telegram_bot_v2 as bot
 
+ORIGINAL_PROCESS = bot.process
+
 
 def welcome_menu(uid):
     rows = [
@@ -62,7 +64,7 @@ def process(u):
             else:
                 bot.base.send(m['chat']['id'], '⛔ Доступ запрещён.', False)
             return
-    bot.process(u)
+    ORIGINAL_PROCESS(u)
 
 
 bot.process = process
