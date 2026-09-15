@@ -18,7 +18,15 @@ mkdir -p "$backup"
 [ -f "$V2" ] && cp -a "$V2" "$backup/telegram_bot_v2.py"
 [ -f "$WELCOME" ] && cp -a "$WELCOME" "$backup/telegram_welcome.py"
 
-echo '[1/6] Downloading enhanced bot...'
+echo '[1/7] Checking Python dependencies...'
+if ! python3 -c 'import flask' >/dev/null 2>&1; then
+  echo 'Flask is missing. Installing system package python3-flask...'
+  apt-get update
+  DEBIAN_FRONTEND=noninteractive apt-get install -y python3-flask
+fi
+python3 -c 'import flask; print("Flask:", flask.__version__)' 2>/dev/null || python3 -c 'import flask; print("Flask: installed")'
+
+echo '[2/7] Downloading enhanced bot...'
 curl -fsSL --retry 3 "$REPO_RAW/telegram_bot_v2.py" -o "$V2.new"
 curl -fsSL --retry 3 "$REPO_RAW/telegram_welcome.py" -o "$WELCOME.new"
 python3 -m py_compile "$V2.new" "$WELCOME.new"
@@ -26,7 +34,7 @@ mv "$V2.new" "$V2"
 mv "$WELCOME.new" "$WELCOME"
 chmod 750 "$V2" "$WELCOME"
 
-echo '[2/6] Preparing configuration...'
+echo '[3/7] Preparing configuration...'
 mkdir -p /etc/awg31-panel
 if [ ! -f "$ENV" ]; then
 cat > "$ENV" <<'EOF'
@@ -42,7 +50,7 @@ EOF
 fi
 chmod 600 "$ENV"
 
-echo '[3/6] Installing systemd override...'
+echo '[4/7] Installing systemd override...'
 cat > "$DROPIN" <<EOF
 [Service]
 ExecStart=
@@ -52,16 +60,17 @@ RestartSec=3
 EOF
 systemctl daemon-reload
 
-echo '[4/6] Checking Python files...'
+echo '[5/7] Checking Python files...'
 python3 -m py_compile "$V2" "$WELCOME"
 python3 -m py_compile "$BOT"
 
-echo '[5/6] Restarting bot...'
+echo '[6/7] Restarting bot...'
 systemctl enable "$SERVICE" >/dev/null 2>&1 || true
+systemctl reset-failed "$SERVICE" >/dev/null 2>&1 || true
 systemctl restart "$SERVICE"
 sleep 2
 
-echo '[6/6] Result:'
+echo '[7/7] Result:'
 echo "Backup: $backup"
 echo "Service: $(systemctl is-active "$SERVICE" || true)"
 systemctl --no-pager --full status "$SERVICE" | sed -n '1,18p' || true
