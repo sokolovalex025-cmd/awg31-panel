@@ -34,6 +34,16 @@ def test_health9_smoke():
     assert response.get_json()["version"] == "11.1"
 
 
+def test_awg_profile_is_single_source_of_truth():
+    guard = importlib.import_module("nova_awg31_fix")
+    assert guard.PARAMS["S1"] == guard.PARAMS["S2"] == guard.PARAMS["S3"] == guard.PARAMS["S4"] == "16"
+    assert guard.PARAMS["H1"] == "1"
+    assert guard.PARAMS["H2"] == "2"
+    assert guard.PARAMS["H3"] == "3"
+    assert guard.PARAMS["H4"] == "4"
+    assert guard.PARAMS["RandomTrailers"] == "on"
+
+
 def test_diagnostics_smoke():
     client = app9.core.app.test_client()
     with client.session_transaction() as sess:
