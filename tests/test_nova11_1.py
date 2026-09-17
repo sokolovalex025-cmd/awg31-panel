@@ -4,7 +4,15 @@ import os
 os.environ.setdefault("AWGPANEL_SECRET", "test-secret")
 
 
+def _runtime():
+    importlib.import_module("app")
+    importlib.import_module("app9")
+    fixes = importlib.import_module("nova11_fixes")
+    fixes.apply()
+
+
 def test_awg_profile_is_single_source_of_truth():
+    _runtime()
     fixer = importlib.import_module("nova_awg31_fix")
     diagnostics = importlib.import_module("nova_diagnostics")
     assert diagnostics.EXPECTED_AWG_PARAMS == fixer.PARAMS
@@ -15,7 +23,7 @@ def test_awg_profile_is_single_source_of_truth():
 
 
 def test_diagnostics_can_render_without_production_sqlite():
-    app = importlib.import_module("app")
+    _runtime()
     app9 = importlib.import_module("app9")
     client = app9.core.app.test_client()
     with client.session_transaction() as sess:
@@ -26,6 +34,7 @@ def test_diagnostics_can_render_without_production_sqlite():
 
 
 def test_health9_endpoint_exists_and_is_public_smoke():
+    _runtime()
     app9 = importlib.import_module("app9")
     rules = app9.core.app.url_map._rules_by_endpoint
     assert "health9" in rules
