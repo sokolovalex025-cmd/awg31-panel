@@ -7,7 +7,7 @@ python3 -m venv "$REPO_DIR/venv"; "$REPO_DIR/venv/bin/pip" install --upgrade pip
 mkdir -p "$BASE/backups"
 # Install every runtime component used by the current NOVA stack. Missing optional
 # files are skipped so older installations remain upgrade-compatible.
-for f in app.py app9.py nova11.py panel_bootstrap.py nova12_theme.py nova13_theme.py nova14_theme.py nova15_theme.py nova16_server_card_fix.py nova_scroll_buttons.py nova_awg31_fix.py antiblock.py nova_shield.py nova_resilience.py nova_doctor_ui.py nova_diagnostics.py domain_manager.py naiveproxy_panel.py telegram_ui.py telegram_bot.py telegram_runner.py telegram_delete.py telegram_payments.py system_panel.py mobile_nav.py security_hardening.py keenetic.py balancer.py balancer_provision.py nova_mobile_diagnostics.py nova_command_center.py background.svg keenetic-routing-guide.txt nova-network-fix.sh nova-max-backup.sh nova-migrate.sh nova-verify.sh nova-watchdog.sh nova-watchdog.service nova-watchdog.timer; do [ -f "$REPO_DIR/$f" ] && install -m 644 "$REPO_DIR/$f" "$BASE/$f"; done
+for f in app.py app9.py nova11.py nova11_fixes.py panel_bootstrap.py nova12_theme.py nova13_theme.py nova14_theme.py nova15_theme.py nova16_server_card_fix.py nova_scroll_buttons.py nova_awg31_fix.py antiblock.py nova_shield.py nova_resilience.py nova_doctor_ui.py nova_diagnostics.py domain_manager.py naiveproxy_panel.py telegram_ui.py telegram_bot.py telegram_runner.py telegram_delete.py telegram_payments.py system_panel.py mobile_nav.py security_hardening.py keenetic.py balancer.py balancer_provision.py nova_mobile_diagnostics.py nova_command_center.py background.svg keenetic-routing-guide.txt nova-network-fix.sh nova-max-backup.sh nova-migrate.sh nova-verify.sh nova-watchdog.sh nova-watchdog.service nova-watchdog.timer; do [ -f "$REPO_DIR/$f" ] && install -m 644 "$REPO_DIR/$f" "$BASE/$f"; done
 # Keep the runtime bootstrap compatible with both old and new repository layouts.
 if ! grep -q 'nova_command_center' "$BASE/panel_bootstrap.py"; then
   sed -i "/^nova11\.core\.app\.run/i\\try:\n    import nova_command_center; nova_command_center.apply(nova11); print('NOVA Command Center: READY',flush=True)\nexcept Exception as e: print('NOVA Command Center disabled:',e,flush=True)" "$BASE/panel_bootstrap.py"
@@ -17,6 +17,9 @@ if ! grep -q 'nova_doctor_ui' "$BASE/panel_bootstrap.py"; then
 fi
 if ! grep -q 'nova_diagnostics' "$BASE/panel_bootstrap.py"; then
   sed -i "/^nova11\.core\.app\.run/i\\try:\n    import nova_diagnostics; nova_diagnostics.apply(nova11); print('NOVA Diagnostics: FULL',flush=True)\nexcept Exception as e: print('NOVA Diagnostics disabled:',e,flush=True)" "$BASE/panel_bootstrap.py"
+fi
+if ! grep -q 'nova11_fixes' "$BASE/panel_bootstrap.py"; then
+  sed -i "/^nova11\.core\.app\.run/i\\try:\n    import nova11_fixes; nova11_fixes.apply(); print('NOVA 11.1 fixes: READY',flush=True)\nexcept Exception as e: print('NOVA 11.1 fixes disabled:',e,flush=True)" "$BASE/panel_bootstrap.py"
 fi
 chmod 755 "$BASE/nova_awg31_fix.py" "$BASE/nova-network-fix.sh" "$BASE/nova-max-backup.sh" "$BASE/nova-migrate.sh" "$BASE/nova-verify.sh" "$BASE/panel_bootstrap.py" "$BASE/nova-watchdog.sh"
 install -m 644 "$BASE/nova-watchdog.service" /etc/systemd/system/nova-watchdog.service
@@ -41,5 +44,6 @@ echo 'NOVA Diagnostics: FULL /diagnostics + /api/nova/diagnostics/full'
 echo 'NOVA Watchdog: every minute'
 echo 'NOVA Sidebar Controls: UP/DOWN'
 echo 'NOVA Command Center: READY'
+echo 'NOVA 11.1 compatibility fixes: READY'
 echo 'Telegram Bot: UPDATED'
 echo 'AWG 3.1 configuration was migrated and checked.'
