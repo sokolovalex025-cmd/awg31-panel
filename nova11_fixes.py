@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """NOVA 11.1 compatibility and consistency fixes."""
+from pathlib import Path
 from flask import jsonify, render_template_string
 
 
@@ -58,7 +59,14 @@ def _diagnostics_page():
     {% for name, ok, detail in rows %}<div class="notice {{ 'good' if ok else 'badbox' }}"><b>{{ '✓' if ok else '✕' }} {{ name }}</b><div style="margin-top:5px">{{ detail }}</div></div>{% endfor %}</div>
     <div class="card" style="margin-top:14px"><div class="kv"><div><span>Peers</span><b>{{ peers|length }}</b></div><div><span>Online</span><b>{{ recent }}</b></div><div><span>UDP</span><b>{{ port }}</b></div><div><span>MTU</span><b>{{ cfg.get('MTU','—') }}</b></div></div></div>
     ''', rows=rows, all_ok=all(x[1] for x in rows), peers=peers, recent=recent, port=port, cfg=cfg)
-    return core.layout("Диагностика", body, "/diagnostics")
+    # The normal NOVA layout reads the production clients table. In CI that table
+    # is intentionally absent, so render a small standalone diagnostic document.
+    try:
+        if Path('/opt/awg31-panel/panel.db').exists():
+            return core.layout("Диагностика", body, "/diagnostics")
+    except Exception:
+        pass
+    return render_template_string('<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Диагностика</title></head><body>{{ body|safe }}</body></html>', body=body)
 
 
 def apply():
@@ -71,10 +79,16 @@ def apply():
     except Exception:
         pass
 
-    @core.app.get("/api/health9", endpoint="health9")
     def health9():
         cfg = core.cfg()
         return jsonify({"ok": True, "version": "11.1", "awg": core.online(), "port": cfg.get("ListenPort", "1234"), "mtu": cfg.get("MTU", "1280")})
+
+    # app9/main may already have registered this endpoint. Replace the view in
+    # place instead of adding a second Flask rule, which keeps apply() idempotent.
+    if "health9" in core.app.view_functions:
+        core.app.view_functions["health9"] = health9
+    else:
+        core.app.add_url_rule("/api/health9", "health9", health9, methods=["GET"])
 
     core.app.view_functions["diagnostics"] = _diagnostics_page
     core.app.view_functions["nova_diagnostics"] = _diagnostics_page
