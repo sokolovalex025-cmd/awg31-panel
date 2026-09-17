@@ -3,6 +3,8 @@ import os
 
 os.environ.setdefault("AWGPANEL_SECRET", "test-secret")
 app = importlib.import_module("app")
+clients12 = importlib.import_module("nova12_clients")
+clients12.apply(app)
 
 
 def test_client_config_inherits_single_awg_profile(monkeypatch):
