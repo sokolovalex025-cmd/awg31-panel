@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NOVA 11 command-center wrapper.
+"""NOVA 12 command-center wrapper.
 
 Keeps the existing AWG/client/backend routes but owns the presentation layer,
 login page and navigation so the UI does not depend on brittle HTML replacement.
@@ -9,8 +9,8 @@ import time
 import app as core
 from flask import request, session, redirect, render_template_string
 
-core.VERSION = '11.0'
-core.BG_VERSION = 'NOVA11'
+core.VERSION = '12.0'
+core.BG_VERSION = 'NOVA12'
 
 try:
     import balancer
@@ -29,7 +29,7 @@ except Exception:
 NOVA_CSS = r'''<style>
 :root{--bg:#070a10;--surface:#0d121b;--surface2:#111925;--surface3:#151e2b;--line:#202b3a;--text:#eef3f8;--muted:#8b98aa;--accent:#7b8cff;--cyan:#43d9c0;--danger:#ff7186;--warn:#f3c45e;--shadow:0 24px 70px rgba(0,0,0,.42)}
 *{box-sizing:border-box}html,body{margin:0;min-height:100%;font:14px Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;color:var(--text);background:var(--bg)}
-body:before{content:"";position:fixed;inset:0;z-index:-3;background:radial-gradient(650px 430px at 5% -5%,rgba(84,111,255,.20),transparent 65%),radial-gradient(620px 440px at 100% 100%,rgba(44,211,181,.12),transparent 65%),linear-gradient(180deg,#070a10f5,#070a10fb),url('/background.svg?v=NOVA11');background-size:auto,auto,auto,cover;background-position:center}
+body:before{content:"";position:fixed;inset:0;z-index:-3;background:radial-gradient(650px 430px at 5% -5%,rgba(84,111,255,.20),transparent 65%),radial-gradient(620px 440px at 100% 100%,rgba(44,211,181,.12),transparent 65%),linear-gradient(180deg,#070a10f5,#070a10fb),url('/background.svg?v=NOVA12');background-size:auto,auto,auto,cover;background-position:center}
 body:after{content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;background-image:linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);background-size:44px 44px;mask-image:linear-gradient(to bottom,rgba(0,0,0,.7),transparent 85%)}
 a{color:inherit}.app{min-height:100vh;display:flex}.sidebar{position:fixed;z-index:30;left:0;top:0;bottom:0;width:278px;padding:18px 14px;background:rgba(9,13,21,.84);border-right:1px solid rgba(255,255,255,.07);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);box-shadow:18px 0 55px rgba(0,0,0,.20);overflow:auto}
 .brand{display:flex;align-items:center;gap:12px;padding:7px 10px 22px}.logo{width:45px;height:45px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(145deg,#8090ff,#42d8be);color:#071018;font-weight:950;letter-spacing:-2px;box-shadow:0 12px 35px rgba(87,112,255,.25)}.brand b{font-size:19px;letter-spacing:-.03em}.brand b span{color:#66e0c6}.brand small{display:block;margin-top:3px;color:#748197;font-size:9px;letter-spacing:.15em;text-transform:uppercase}
@@ -48,7 +48,6 @@ input,select,.input{width:100%;padding:11px 12px;background:#080d15;color:#fff;b
 @media(max-width:760px){.sidebar{width:278px;transform:translateX(-100%);transition:.2s}.sidebar.open{transform:none}.main{width:100%;margin:0;padding:0 15px 35px}.topbar{margin:0 -15px 18px;padding:0 15px;height:64px}.mobile-menu{display:inline-flex}.hero{align-items:flex-start;flex-direction:column}.hero h1{font-size:31px}.grid4{grid-template-columns:1fr 1fr}.formgrid,.actions{grid-template-columns:1fr}.server{display:none}.nova-float{right:14px;bottom:14px}.nova-float span{display:none}}
 @media(max-width:460px){.grid4{grid-template-columns:1fr}.hero h1{font-size:28px}}
 </style>'''
-
 
 def nova_nav(path):
     groups=[
@@ -71,9 +70,9 @@ ORIGINAL_LAYOUT = core.layout
 
 def nova_layout(title, body, path):
     html=ORIGINAL_LAYOUT(title, body, path)
-    html=html.replace('NOVA <span>10</span>','NOVA <span>11</span>')
-    html=html.replace('NOVA Network Control Center · AmneziaWG 3.1 · v10.0','NOVA Network Control Center · AmneziaWG 3.1 · v11.0')
-    html=html.replace("background.svg?v=NOVA'", "background.svg?v=NOVA11'")
+    html=html.replace('NOVA <span>10</span>','NOVA <span>12</span>')
+    html=html.replace('NOVA Network Control Center · AmneziaWG 3.1 · v10.0','NOVA Network Control Center · AmneziaWG 3.1 · v12.0')
+    html=html.replace("background.svg?v=NOVA'", "background.svg?v=NOVA12'")
     float_link='<a class="nova-float" href="/keenetic">🛜 <span>Keenetic</span></a>'
     if 'class="nova-float"' not in html:
         html=html.replace('</body>',float_link+'</body>')
@@ -94,23 +93,7 @@ def nova11_login():
     if request.method=='POST' and request.form.get('login')==core.setting('login','admin') and request.form.get('password')==core.setting('password','change-me'):
         session['logged']=1
         return redirect('/')
-    return render_template_string(NOVA_CSS+'''<div class="login-shell"><div class="login-card"><div class="brand"><div class="logo">NX</div><div><b>NOVA <span>11</span></b><small>NETWORK CONTROL CENTER</small></div></div><div class="eyebrow">SECURE ADMIN ACCESS</div><h1>Вход в NOVA</h1><p>Управление AmneziaWG 3.1 · AWG 3.1 · Keenetic</p><form method="post"><label>Логин</label><input name="login" autocomplete="username" required><label>Пароль</label><input name="password" type="password" autocomplete="current-password" required><button style="width:100%;margin-top:14px">Войти в панель</button></form></div></div>''')
+    return render_template_string(NOVA_CSS+'''<div class="login-shell"><div class="login-card"><div class="brand"><div class="logo">NX</div><div><b>NOVA <span>12</span></b><small>NETWORK CONTROL CENTER</small></div></div><div class="eyebrow">SECURE ADMIN ACCESS</div><h1>Вход в NOVA</h1><p>Управление AmneziaWG 3.1 · AWG 3.1 · Keenetic</p><form method="post"><label>Логин</label><input name="login" autocomplete="username" required><label>Пароль</label><input name="password" type="password" autocomplete="current-password" required><button style="width:100%;margin-top:14px">Войти в панель</button></form></div></div>''')
 
 # Make the canonical /login use the new page without changing authentication semantics.
 core.app.view_functions['login']=nova11_login
-
-@core.app.route('/api/nova/health')
-def nova_health():
-    c=core.cfg()
-    return core.jsonify({'ok':True,'version':'11.0','awg':core.online(),'keenetic_route':any(r.rule=='/keenetic' for r in core.app.url_map.iter_rules()),'port':c.get('ListenPort','1234'),'mtu':c.get('MTU','1280')})
-
-@core.app.route('/api/keenetic/ping11')
-def keenetic_ping11():
-    try:
-        link=core.cmd('ip','link','show','awg-keenetic'); show=core.cmd('awg','show','awg-keenetic')
-        return core.jsonify({'ok':link.returncode==0 and show.returncode==0,'interface':'awg-keenetic','exists':link.returncode==0,'awg':show.returncode==0})
-    except Exception as e:
-        return core.jsonify({'ok':False,'error':str(e)}),500
-
-if __name__=='__main__':
-    core.app.run(host='0.0.0.0',port=8080)
