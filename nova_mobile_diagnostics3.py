@@ -23,6 +23,14 @@ def run(*args: str) -> tuple[int, str]:
         return 1, str(exc)
 
 
+def read_cfg() -> dict[str, Any]:
+    try:
+        import app
+        return dict(app.cfg())
+    except Exception:
+        return {}
+
+
 def safe_config(config: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in config.items() if not any(w in k.lower() for w in SECRET_WORDS)}
 
@@ -63,24 +71,24 @@ def nat_detected() -> bool:
 
 
 def diagnose() -> dict[str, Any]:
-    try:
-        import app
-        cfg = dict(app.cfg())
-    except Exception:
-        cfg = {}
+    cfg = read_cfg()
     port = str(cfg.get("ListenPort", "1234"))
+    ip = public_ip()
     gateway, iface = default_route()
+    udp_ok = udp_listener(port)
+    fwd_ok = forwarding()
+    nat_ok = nat_detected()
     checks = [
-        {"name": "Public IPv4", "ok": public_ip() != "—", "detail": public_ip()},
+        {"name": "Public IPv4", "ok": ip != "—", "detail": ip},
         {"name": "Default route", "ok": iface != "—", "detail": f"{gateway} via {iface}"},
-        {"name": "UDP listener", "ok": udp_listener(port), "detail": f"UDP {port}" if udp_listener(port) else f"UDP {port} not listening"},
-        {"name": "IPv4 forwarding", "ok": forwarding(), "detail": "enabled" if forwarding() else "disabled"},
-        {"name": "NAT", "ok": nat_detected(), "detail": "MASQUERADE detected" if nat_detected() else "MASQUERADE not detected"},
+        {"name": "UDP listener", "ok": udp_ok, "detail": f"UDP {port}" if udp_ok else f"UDP {port} not listening"},
+        {"name": "IPv4 forwarding", "ok": fwd_ok, "detail": "enabled" if fwd_ok else "disabled"},
+        {"name": "NAT", "ok": nat_ok, "detail": "MASQUERADE detected" if nat_ok else "MASQUERADE not detected"},
     ]
     return {
         "ok": all(x["ok"] for x in checks),
         "port": port,
-        "public_ipv4": checks[0]["detail"],
+        "public_ipv4": ip,
         "gateway": gateway,
         "interface": iface,
         "config": safe_config(cfg),
