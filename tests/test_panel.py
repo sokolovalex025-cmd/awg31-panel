@@ -22,7 +22,7 @@ def test_login_page_smoke():
 
 def test_app9_import_smoke():
     mod = app9
-    assert mod.core.VERSION == "11.1"
+    assert mod.core.VERSION == "12.0"
     assert mod.core.app.url_map._rules_by_endpoint["health9"][0].rule == "/api/health9"
     assert mod.core.app.url_map._rules_by_endpoint["diagnostics"][0].rule == "/diagnostics"
 
@@ -33,7 +33,7 @@ def test_health9_smoke():
         sess["logged"] = 1
     response = client.get("/api/health9")
     assert response.status_code == 200
-    assert response.get_json()["version"] == "11.1"
+    assert response.get_json()["version"] == "12.0"
 
 
 def test_awg_profile_is_single_source_of_truth():
