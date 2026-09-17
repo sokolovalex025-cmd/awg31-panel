@@ -29,6 +29,8 @@ def test_app9_import_smoke():
 
 def test_health9_smoke():
     client = app9.core.app.test_client()
+    with client.session_transaction() as sess:
+        sess["logged"] = 1
     response = client.get("/api/health9")
     assert response.status_code == 200
     assert response.get_json()["version"] == "11.1"
