@@ -104,13 +104,8 @@ def apply(nova):
     app=nova.core.app
     @app.route("/awg-toolza")
     def awg_toolza():
-        if hasattr(nova.core,"auth") and not nova.core.auth():
-            from flask import redirect
-            return redirect("/login")
         return HTML
     @app.route("/api/nova/toolza-center")
     def api_toolza():
-        if hasattr(nova.core,"auth") and not nova.core.auth():
-            return jsonify({"error":"unauthorized"}),401
         return jsonify(snapshot())
     return nova
