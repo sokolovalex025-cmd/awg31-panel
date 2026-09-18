@@ -109,7 +109,7 @@ iptables -C FORWARD -i awg0 -o "$WAN" -j ACCEPT 2>/dev/null || iptables -A FORWA
 iptables -C FORWARD -i "$WAN" -o awg0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || iptables -A FORWARD -i "$WAN" -o awg0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 iptables -t nat -C POSTROUTING -s 10.66.66.0/24 -o "$WAN" -j MASQUERADE 2>/dev/null || iptables -t nat -A POSTROUTING -s 10.66.66.0/24 -o "$WAN" -j MASQUERADE
 EOF
-chmod 755 "$BASE/nova-network-fix.sh"
+chmod 755 "$BASE/nova-network-fix.sh" "$BASE/nova_awg31_fix.py" "$BASE/nova-verify.sh" "$BASE/nova-max-backup.sh" "$BASE/nova-migrate.sh" "$BASE/nova-watchdog.sh"
 
 SECRET_DIR=/etc/awg31-panel
 mkdir -p "$SECRET_DIR"
