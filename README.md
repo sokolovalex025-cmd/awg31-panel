@@ -1,10 +1,11 @@
-# NOVA 11 Network Control Center
+# NOVA 12 Network Control Center
 
-Профессиональная web-панель управления **AmneziaWG 3.1** с command-center интерфейсом NOVA 11.
+Профессиональная web-панель управления **AmneziaWG 3.1** с command-center интерфейсом NOVA 12.
 
 ## Возможности
 
-- NOVA 11 Dashboard и Live Traffic;
+- NOVA 12 Dashboard и Live Traffic;
+- **Live Monitor**: автоматическое обновление статуса AWG/peer и агрегированной истории RX/TX;
 - управление клиентами AWG 3.1 и QR/.conf профилями;
 - Strong Mobile и мобильная диагностика;
 - **NOVA Doctor**: проверка AWG, NAT, forwarding, firewall, DNS и сервисов;
@@ -78,6 +79,12 @@ Updater устанавливает зависимости, синхронизи�
 
 Кнопка **«Исправить всё»** сначала создаёт backup, затем применяет сетевой fix и AWG 3.1 guard, перезапускает необходимые сервисы и выполняет повторную диагностику.
 
+## Live Monitor
+
+Открыть `/live-monitor`.
+
+Монитор каждые 5 секунд обновляет статус без перезагрузки страницы, показывает peer/handshake/RX/TX и сохраняет до 120 агрегированных снимков в SQLite. В историю не записываются приватные ключи.
+
 ## Watchdog
 
 `nova-watchdog.timer` запускает проверку раз в минуту. Он перезапускает только неработающие сервисы и использует AWG 3.1 guard только если `awg0` не читается.
@@ -103,12 +110,13 @@ Telegram credentials хранятся на VPS и не должны попада
 
 ```text
 app.py                    ядро web-панели
-nova11.py                 NOVA 11 UI/runtime
-panel_bootstrap.py        SQLite + запуск NOVA 11
+nova11.py                 NOVA UI/runtime
+panel_bootstrap.py        SQLite + запуск NOVA
 nova_awg31_fix.py         AWG 3.1 migration/guard
-nova_mobile_diagnostics.py мобильная диагностика
+nova12_diagnostics.py     структурированная AWG/mobile диагностика
+nova_mobile_diagnostics3.py расширенная read-only mobile диагностика
+nova_mobile_monitor.py    live peer monitor + aggregate history
 nova_resilience.py        Doctor + resilience + backups
-nova_shield.py            connectivity health
 nova-watchdog.sh          автоматическое восстановление сервисов
 nova-watchdog.service     watchdog service
 nova-watchdog.timer       запуск watchdog раз в минуту
