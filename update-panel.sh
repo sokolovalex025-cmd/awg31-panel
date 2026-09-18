@@ -21,7 +21,7 @@ python3 -m venv "$REPO_DIR/venv"
 "$REPO_DIR/venv/bin/pip" install --upgrade pip
 "$REPO_DIR/venv/bin/pip" install Flask 'qrcode[pil]' pytest
 mkdir -p "$BASE/backups"
-for f in app.py app9.py nova11.py nova11_fixes.py panel_bootstrap.py nova12_theme.py nova13_theme.py nova14_theme.py nova15_theme.py nova16_server_card_fix.py nova_scroll_buttons.py nova_awg31_fix.py antiblock.py nova_shield.py nova_resilience.py nova_doctor_ui.py nova_diagnostics.py nova12_diagnostics.py nova_mobile_diagnostics3.py nova_mobile_monitor.py nova12_clients.py nova12_ui.py domain_manager.py naiveproxy_panel.py telegram_ui.py telegram_bot.py telegram_runner.py telegram_delete.py telegram_payments.py system_panel.py mobile_nav.py security_hardening.py keenetic.py balancer.py balancer_provision.py nova_mobile_diagnostics.py nova_command_center.py background.svg keenetic-routing-guide.txt nova-network-fix.sh nova-max-backup.sh nova-migrate.sh nova-verify.sh nova-watchdog.sh nova-watchdog.service nova-watchdog.timer; do
+for f in app.py app9.py nova11.py nova11_fixes.py panel_bootstrap.py nova12_theme.py nova13_theme.py nova14_theme.py nova15_theme.py nova16_server_card_fix.py nova_scroll_buttons.py nova_awg31_fix.py antiblock.py nova_shield.py nova_resilience.py nova_doctor_ui.py nova_diagnostics.py nova12_diagnostics.py nova_mobile_diagnostics3.py nova_mobile_monitor.py nova_toolza_center.py nova12_clients.py nova12_ui.py domain_manager.py naiveproxy_panel.py telegram_ui.py telegram_bot.py telegram_runner.py telegram_delete.py telegram_payments.py system_panel.py mobile_nav.py security_hardening.py keenetic.py balancer.py balancer_provision.py nova_mobile_diagnostics.py nova_command_center.py background.svg keenetic-routing-guide.txt nova-network-fix.sh nova-max-backup.sh nova-migrate.sh nova-verify.sh nova-watchdog.sh nova-watchdog.service nova-watchdog.timer; do
   [ -f "$REPO_DIR/$f" ] && install -m 644 "$REPO_DIR/$f" "$BASE/$f"
 done
 if ! grep -q 'nova_command_center' "$BASE/panel_bootstrap.py"; then
@@ -58,6 +58,9 @@ if ! grep -q 'nova_mobile_monitor' "$BASE/panel_bootstrap.py"; then
   sed -i "/^nova11.core.app.run/i\try:
     import nova_mobile_monitor; nova_mobile_monitor.apply(nova11); print('NOVA Live Monitor: READY',flush=True)
 except Exception as e: print('NOVA Live Monitor disabled:',e,flush=True)" "$BASE/panel_bootstrap.py"
+fi
+if ! grep -q 'nova_toolza_center' "$BASE/panel_bootstrap.py"; then
+  sed -i "/^nova11.core.app.run/i\try:\n    import nova_toolza_center; nova_toolza_center.apply(nova11); print('NOVA AWG Toolza Center: READY',flush=True)\nexcept Exception as e: print('NOVA AWG Toolza Center disabled:',e,flush=True)" "$BASE/panel_bootstrap.py"
 fi
 if ! grep -q 'nova12_clients' "$BASE/panel_bootstrap.py"; then
   sed -i "/^nova11.core.app.run/i\try:
@@ -99,6 +102,7 @@ echo 'NOVA UI 12.0: mobile diagnostics navigation + version identity'
 echo 'NOVA Watchdog: every minute'
 echo 'NOVA Sidebar Controls: UP/DOWN'
 echo 'NOVA Command Center: READY'
+echo 'NOVA AWG Toolza Center: /awg-toolza + /api/nova/toolza-center'
 echo 'NOVA 11.1 compatibility fixes: READY'
 echo 'Telegram Bot: UPDATED'
 echo 'AWG 3.1 configuration was migrated and checked.'
