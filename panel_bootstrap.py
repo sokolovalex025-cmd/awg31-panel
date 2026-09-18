@@ -39,6 +39,9 @@ try:
     import nova_mobile_diagnostics3; nova_mobile_diagnostics3.apply(nova11); print('NOVA Mobile Diagnostics 3.0: READY',flush=True)
 except Exception as e: print('NOVA Mobile Diagnostics 3.0 disabled:',e,flush=True)
 try:
+    import nova_mobile_monitor; nova_mobile_monitor.apply(nova11); print('NOVA Live Monitor: READY',flush=True)
+except Exception as e: print('NOVA Live Monitor disabled:',e,flush=True)
+try:
     import nova12_clients; nova12_clients.apply(nova11.core); print('NOVA 12 Client Profiles: READY',flush=True)
 except Exception as e: print('NOVA 12 Client Profiles disabled:',e,flush=True)
 try:
