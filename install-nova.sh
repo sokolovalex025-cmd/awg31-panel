@@ -176,6 +176,7 @@ nginx -t
 # Install defaults, then replace the generated admin credentials with the values chosen above.
 "$REPO_DIR/venv/bin/python" -m py_compile "$BASE"/*.py
 systemctl daemon-reload
+iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
 systemctl enable --now awg-quick@awg0.service
 "$REPO_DIR/venv/bin/python" "$BASE/nova_awg31_fix.py"
 systemctl enable --now awg31-network.service
