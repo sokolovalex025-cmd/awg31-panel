@@ -24,3 +24,5 @@ def test_installer_is_bash_syntax_checked():
 # Focused CI smoke coverage for the external Toolza bridge.
 
 # smoke rerun
+
+# final smoke assertion fix
