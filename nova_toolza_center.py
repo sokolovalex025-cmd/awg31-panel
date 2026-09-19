@@ -140,6 +140,56 @@ def _external_toolza():
         "repository": "https://github.com/pumbaX/awg-multi-script",
     }
 
+def _live_snapshot():
+    """Return safe live telemetry without exposing AWG secrets."""
+    try:
+        import nova12_diagnostics
+        d = nova12_diagnostics.diagnose()
+    except Exception as exc:
+        return {
+            "online_peers": 0, "peer_count": 0, "rx": 0, "tx": 0,
+            "last_handshake": 0, "mobile_ready": False,
+            "awg_service": False, "panel_service": False,
+            "uptime": "unknown", "error": str(exc),
+        }
+
+    peers = d.get("peers") or []
+    online = [p for p in peers if p.get("online")]
+    rx = sum(int(p.get("rx") or 0) for p in peers)
+    tx = sum(int(p.get("tx") or 0) for p in peers)
+    last_handshake = max((int(p.get("handshake") or 0) for p in peers), default=0)
+
+    def active(unit):
+        try:
+            return subprocess.run(
+                ["systemctl", "is-active", "--quiet", unit],
+                timeout=2,
+            ).returncode == 0
+        except Exception:
+            return False
+
+    uptime = _run("uptime", "-p") or "unknown"
+    mobile_ready = bool(
+        d.get("profile_ok")
+        and d.get("port")
+        and d.get("online_peers", 0) >= 0
+    )
+
+    return {
+        "online_peers": len(online),
+        "peer_count": len(peers),
+        "rx": rx,
+        "tx": tx,
+        "last_handshake": last_handshake,
+        "mobile_ready": mobile_ready,
+        "awg_service": active("awg-quick@awg0.service"),
+        "panel_service": active("awgpanel.service"),
+        "toolz_service": active("awg-toolz.service"),
+        "uptime": uptime,
+        "error": "",
+    }
+
+
 def snapshot():
     cfg = _config()
     mismatches = {k: {"expected": v, "actual": cfg.get(k)}
@@ -150,6 +200,7 @@ def snapshot():
         "external_toolza_note": "NOVA only inspects /usr/local/bin/awg2; web requests never execute external Toolza.",
         "external_toolza": _external_toolza(),
         "daemon": _daemon(),
+        "live": _live_snapshot(),
         "awg": _version(),
         "awg_state": _awg_state(),
         "udp_ports": _listen_port(),
@@ -262,6 +313,15 @@ HTML = r'''<style>
       </div>
       <div class="nova-tz-panel">
         <div class="nova-tz-panel-title"><span>📡 Live snapshot</span><span class="nova-tz-badge">15 sec</span></div>
+        <div class="nova-tz-mini-grid">
+          <div class="nova-tz-mini"><label>Клиенты</label><b id="tz-clients">—</b><small id="tz-clients-sub">—</small></div>
+          <div class="nova-tz-mini"><label>Последний handshake</label><b id="tz-handshake">—</b><small>максимальный среди peer</small></div>
+          <div class="nova-tz-mini"><label>RX / TX</label><b id="tz-traffic">—</b><small>суммарный трафик peer</small></div>
+          <div class="nova-tz-mini"><label>Mobile Ready</label><b id="tz-mobile-ready">—</b><small>профиль + сеть</small></div>
+          <div class="nova-tz-mini"><label>AWG service</label><b id="tz-awg-service">—</b><small>awg-quick@awg0</small></div>
+          <div class="nova-tz-mini"><label>Panel / Toolz</label><b id="tz-services">—</b><small>systemd</small></div>
+          <div class="nova-tz-mini" style="grid-column:1/-1"><label>Uptime</label><b id="tz-uptime">—</b></div>
+        </div>
         <details class="nova-tz-collapse"><summary>Показать технические данные</summary><pre class="nova-tz-pre" id="tz-details">Загрузка…</pre></details>
       </div>
     </aside>
@@ -288,6 +348,21 @@ async function novaToolzaLoad(){
   document.getElementById('tz-ip').textContent=d.network.public_ipv4;document.getElementById('tz-route').textContent=d.network.default_route;
   document.getElementById('tz-fwd').textContent=d.network.forwarding?'ON':'OFF';document.getElementById('tz-fwd').className=cls(d.network.forwarding);
   document.getElementById('tz-nat').textContent=d.network.nat?'FOUND':'MISSING';document.getElementById('tz-nat').className=cls(d.network.nat);
+  const live=d.live||{};
+  const fmtBytes=n=>{n=Number(n||0);const u=['B','KB','MB','GB','TB'];let i=0;while(n>=1024&&i<u.length-1){n/=1024;i++;}return n.toFixed(n>=10?0:1)+' '+u[i]};
+  const ago=ts=>{ts=Number(ts||0);if(!ts)return '—';const s=Math.max(0,Math.floor(Date.now()/1000-ts));return s<60?s+' сек. назад':s<3600?Math.floor(s/60)+' мин. назад':Math.floor(s/3600)+' ч. назад'};
+  document.getElementById('tz-clients').textContent=(live.online_peers||0)+' / '+(live.peer_count||0);
+  document.getElementById('tz-clients').className=(live.online_peers||0)>0?'nova-tz-ok':'';
+  document.getElementById('tz-clients-sub').textContent=(live.online_peers||0)>0?'ONLINE':'активных сейчас нет';
+  document.getElementById('tz-handshake').textContent=ago(live.last_handshake);
+  document.getElementById('tz-traffic').textContent=fmtBytes(live.rx)+' / '+fmtBytes(live.tx);
+  document.getElementById('tz-mobile-ready').textContent=live.mobile_ready?'READY':'CHECK';
+  document.getElementById('tz-mobile-ready').className=live.mobile_ready?'nova-tz-ok':'nova-tz-warn';
+  document.getElementById('tz-awg-service').textContent=live.awg_service?'ACTIVE':'DOWN';
+  document.getElementById('tz-awg-service').className=live.awg_service?'nova-tz-ok':'nova-tz-bad';
+  document.getElementById('tz-services').textContent=(live.panel_service?'PANEL ✓':'PANEL ✕')+' / '+(live.toolz_service?'TOOLZ ✓':'TOOLZ ✕');
+  document.getElementById('tz-services').className=(live.panel_service&&live.toolz_service)?'nova-tz-ok':'nova-tz-bad';
+  document.getElementById('tz-uptime').textContent=live.uptime||'unknown';
   document.getElementById('tz-profile-grid').innerHTML=Object.entries(d.expected_profile).map(x=>'<div class="nova-tz-param"><span>'+x[0]+'</span><strong>'+x[1]+'</strong></div>').join('');
   const ext=d.external_toolza||{};
   document.getElementById('tz-external').textContent=ext.installed?'INSTALLED':'NOT INSTALLED';
@@ -297,7 +372,7 @@ async function novaToolzaLoad(){
   const bad=Object.entries(d.mismatches||{}).map(x=>x[0]+': expected '+x[1].expected+', actual '+x[1].actual);
   document.getElementById('tz-result').className='nova-tz-status '+(d.profile_ok?'nova-tz-ok':'nova-tz-bad');document.getElementById('tz-result').innerHTML=d.profile_ok?'✓ Canonical profile совпадает':'⚠ '+bad.join(' · ');
   document.getElementById('tz-probes').innerHTML=(d.probes||[]).map(p=>'<tr><td><strong>'+p.name+'</strong><small>'+p.host+'</small></td><td>'+((p.ipv4||[]).join(', ')||'—')+'</td><td class="'+cls(p.dns_ok)+'"><span class="nova-tz-dot"></span>'+(p.dns_ok?'OK':'FAIL')+'</td><td class="'+cls(p.tcp_ok)+'"><span class="nova-tz-dot"></span>'+(p.tcp_ok?'OPEN':'FAIL')+'</td></tr>').join('');
-  document.getElementById('tz-details').textContent=['AWG tools: '+d.awg.tools,'Kernel module: '+d.awg.loaded_module,'AWG0: '+(d.awg_state.up?'ONLINE':'OFFLINE'),'UDP ports: '+(d.udp_ports||[]).join(', '),'ListenPort: '+(d.listen_port||'—'),'Public IPv4: '+d.network.public_ipv4,'Default route: '+d.network.default_route,'Forwarding: '+d.network.forwarding,'NAT: '+d.network.nat,'DNS: '+(d.network.dns||[]).join(' | ')].join('\\n');
+  document.getElementById('tz-details').textContent=['AWG tools: '+d.awg.tools,'Kernel module: '+d.awg.loaded_module,'AWG0: '+(d.awg_state.up?'ONLINE':'OFFLINE'),'UDP ports: '+(d.udp_ports||[]).join(', '),'ListenPort: '+(d.listen_port||'—'),'Public IPv4: '+d.network.public_ipv4,'Default route: '+d.network.default_route,'Forwarding: '+d.network.forwarding,'NAT: '+d.network.nat,'DNS: '+(d.network.dns||[]).join(' | '),'Clients: '+(live.online_peers||0)+'/'+(live.peer_count||0),'RX/TX: '+fmtBytes(live.rx)+' / '+fmtBytes(live.tx),'Last handshake: '+ago(live.last_handshake),'Mobile Ready: '+live.mobile_ready,'Services: AWG='+(live.awg_service?'active':'down')+', Panel='+(live.panel_service?'active':'down')+', Toolz='+(live.toolz_service?'active':'down'),'Uptime: '+(live.uptime||'unknown')].join('\\n');
   novaClock();
  }catch(e){document.getElementById('tz-details').textContent='Ошибка проверки: '+e}
 }
