@@ -119,12 +119,33 @@ def _daemon():
         with urllib.request.urlopen(req,timeout=2) as f: return __import__("json").load(f)
     except Exception as e: return {"ok":False,"error":str(e)}
 
+def _external_toolza():
+    path = "/usr/local/bin/awg2"
+    installed = bool(shutil.which("awg2"))
+    version = ""
+    if installed:
+        try:
+            p = subprocess.run([path, "--help"], capture_output=True, text=True, timeout=4)
+            if p.returncode == 0:
+                version = next((x.strip() for x in p.stdout.splitlines() if x.startswith("awg2 ")), "")
+        except Exception:
+            pass
+    return {
+        "installed": installed,
+        "path": path if installed else None,
+        "version": version,
+        "expected_version": "v0.8.25",
+        "pinned_commit": "ecccafa3094181a6962ff71e54527e4771657698",
+        "repository": "https://github.com/pumbaX/awg-multi-script",
+    }
+
 def snapshot():
     cfg = _config()
     mismatches = {k: {"expected": v, "actual": cfg.get(k)}
                   for k, v in PARAMS.items() if cfg.get(k) != v}
     return {
         "mode": "read-only",
+        "external_toolza": _external_toolza(),
         "daemon": _daemon(),
         "awg": _version(),
         "awg_state": _awg_state(),
@@ -201,6 +222,17 @@ HTML = r'''<style>
       </div>
 
       <div class="nova-tz-panel">
+        <div class="nova-tz-panel-title"><span>🧩 AWG Toolza</span><span class="nova-tz-badge">external CLI</span></div>
+        <div class="nova-tz-panel-sub">Совместимость с внешним AWG Toolza. NOVA не запускает его из веб-интерфейса и не передаёт ему управление awg0 автоматически.</div>
+        <div class="nova-tz-mini-grid">
+          <div class="nova-tz-mini"><label>Статус</label><b id="tz-external">Проверяем…</b><small id="tz-external-version">—</small></div>
+          <div class="nova-tz-mini"><label>Версия</label><b>v0.8.25</b><small>pinned upstream</small></div>
+        </div>
+        <div class="nova-tz-status" id="tz-external-note">Проверяем наличие /usr/local/bin/awg2…</div>
+        <div style="margin-top:11px"><a class="nova-tz-btn" href="https://github.com/pumbaX/awg-multi-script" target="_blank" rel="noopener">Открыть AWG Toolza ↗</a></div>
+      </div>
+
+      <div class="nova-tz-panel">
         <div class="nova-tz-panel-title"><span>📱 NOVA Strong Mobile</span><span class="nova-tz-badge">AWG 3.1</span></div>
         <div class="nova-tz-panel-sub">Одинаковый canonical-профиль для сервера и генератора клиентских конфигураций.</div>
         <div class="nova-tz-profile" id="tz-profile-grid">Загрузка…</div>
@@ -254,6 +286,11 @@ async function novaToolzaLoad(){
   document.getElementById('tz-fwd').textContent=d.network.forwarding?'ON':'OFF';document.getElementById('tz-fwd').className=cls(d.network.forwarding);
   document.getElementById('tz-nat').textContent=d.network.nat?'FOUND':'MISSING';document.getElementById('tz-nat').className=cls(d.network.nat);
   document.getElementById('tz-profile-grid').innerHTML=Object.entries(d.expected_profile).map(x=>'<div class="nova-tz-param"><span>'+x[0]+'</span><strong>'+x[1]+'</strong></div>').join('');
+  const ext=d.external_toolza||{};
+  document.getElementById('tz-external').textContent=ext.installed?'INSTALLED':'NOT INSTALLED';
+  document.getElementById('tz-external').className=cls(ext.installed);
+  document.getElementById('tz-external-version').textContent=ext.version||'Команда awg2 не найдена';
+  document.getElementById('tz-external-note').textContent=ext.installed?'✓ AWG Toolza обнаружен. NOVA сохраняет управление awg0 за своей конфигурацией.':'ℹ️ Установить можно через /opt/awg31-panel/install-awg-toolza.sh';
   const bad=Object.entries(d.mismatches||{}).map(x=>x[0]+': expected '+x[1].expected+', actual '+x[1].actual);
   document.getElementById('tz-result').className='nova-tz-status '+(d.profile_ok?'nova-tz-ok':'nova-tz-bad');document.getElementById('tz-result').innerHTML=d.profile_ok?'✓ Canonical profile совпадает':'⚠ '+bad.join(' · ');
   document.getElementById('tz-probes').innerHTML=(d.probes||[]).map(p=>'<tr><td><strong>'+p.name+'</strong><small>'+p.host+'</small></td><td>'+((p.ipv4||[]).join(', ')||'—')+'</td><td class="'+cls(p.dns_ok)+'"><span class="nova-tz-dot"></span>'+(p.dns_ok?'OK':'FAIL')+'</td><td class="'+cls(p.tcp_ok)+'"><span class="nova-tz-dot"></span>'+(p.tcp_ok?'OPEN':'FAIL')+'</td></tr>').join('');
