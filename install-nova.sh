@@ -59,7 +59,7 @@ python3 -m venv "$REPO_DIR/venv"
 "$REPO_DIR/venv/bin/pip" install Flask 'qrcode[pil]' pytest
 
 mkdir -p "$BASE/backups" /etc/amnezia/amneziawg
-for f in app.py nova11.py panel_bootstrap.py nova12_theme.py nova13_theme.py nova14_theme.py nova15_theme.py nova16_server_card_fix.py nova_scroll_buttons.py nova_awg31_fix.py nova_toolza_center.py nova_mobile_diagnostics.py nova12_diagnostics.py nova_mobile_diagnostics3.py nova_mobile_monitor.py nova12_clients.py nova12_ui.py nova_diagnostics.py nova_doctor_ui.py nova_command_center.py nova_resilience.py nova_shield.py antiblock.py domain_manager.py security_hardening.py telegram_ui.py telegram_bot.py telegram_runner.py telegram_delete.py telegram_payments.py system_panel.py mobile_nav.py keenetic.py balancer.py balancer_provision.py naiveproxy_panel.py background.svg keenetic-routing-guide.txt nova-network-fix.sh nova-max-backup.sh nova-migrate.sh nova-verify.sh nova-watchdog.sh nova-watchdog.service nova-watchdog.timer update-panel.sh; do
+for f in app.py nova11.py panel_bootstrap.py nova12_theme.py nova13_theme.py nova14_theme.py nova15_theme.py nova16_server_card_fix.py nova_scroll_buttons.py nova_awg31_fix.py nova_toolza_center.py awg-toolz-daemon.py awg-toolz.service nova_mobile_diagnostics.py nova12_diagnostics.py nova_mobile_diagnostics3.py nova_mobile_monitor.py nova12_clients.py nova12_ui.py nova_diagnostics.py nova_doctor_ui.py nova_command_center.py nova_resilience.py nova_shield.py antiblock.py domain_manager.py security_hardening.py telegram_ui.py telegram_bot.py telegram_runner.py telegram_delete.py telegram_payments.py system_panel.py mobile_nav.py keenetic.py balancer.py balancer_provision.py naiveproxy_panel.py background.svg keenetic-routing-guide.txt nova-network-fix.sh nova-max-backup.sh nova-migrate.sh nova-verify.sh nova-watchdog.sh nova-watchdog.service nova-watchdog.timer update-panel.sh; do
   [ -f "$REPO_DIR/$f" ] && install -m 644 "$REPO_DIR/$f" "$BASE/$f"
 done
 
@@ -175,9 +175,16 @@ nginx -t
 
 # Install defaults, then replace the generated admin credentials with the values chosen above.
 "$REPO_DIR/venv/bin/python" -m py_compile "$BASE"/*.py
+mkdir -p /etc/awg-toolz
+umask 077
+[ -s /etc/awg-toolz/token ] || python3 -c "import secrets; print(secrets.token_urlsafe(48))" > /etc/awg-toolz/token
+chmod 600 /etc/awg-toolz/token
+install -m 644 "$BASE/awg-toolz.service" /etc/systemd/system/awg-toolz.service
+chmod 755 "$BASE/awg-toolz-daemon.py"
 systemctl daemon-reload
 iptables -C INPUT -p udp --dport "$PORT" -j ACCEPT 2>/dev/null || iptables -I INPUT -p udp --dport "$PORT" -j ACCEPT
 systemctl enable --now awg-quick@awg0.service
+systemctl enable --now awg-toolz.service
 "$REPO_DIR/venv/bin/python" "$BASE/nova_awg31_fix.py"
 systemctl enable --now awg31-network.service
 systemctl enable awgpanel.service
