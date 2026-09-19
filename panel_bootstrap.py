@@ -45,6 +45,9 @@ try:
     import nova_toolza_center; nova_toolza_center.apply(nova11); print('NOVA AWG Toolza Center: READY',flush=True)
 except Exception as e: print('NOVA AWG Toolza Center disabled:',e,flush=True)
 try:
+    import nova_toolza_external; nova_toolza_external.apply(nova11); print('External AWG Toolza bridge: READY',flush=True)
+except Exception as e: print('External AWG Toolza bridge disabled:',e,flush=True)
+try:
     import nova12_clients; nova12_clients.apply(nova11.core); print('NOVA 12 Client Profiles: READY',flush=True)
 except Exception as e: print('NOVA 12 Client Profiles disabled:',e,flush=True)
 try:
