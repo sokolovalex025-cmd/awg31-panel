@@ -111,12 +111,21 @@ def _awg_state():
         "raw": None,
     }
 
+def _daemon():
+    try:
+        import urllib.request, pathlib
+        t=pathlib.Path("/etc/awg-toolz/token").read_text().strip()
+        req=urllib.request.Request("http://127.0.0.1:9090/v1/status",headers={"X-NOVA-Toolz-Token":t})
+        with urllib.request.urlopen(req,timeout=2) as f: return __import__("json").load(f)
+    except Exception as e: return {"ok":False,"error":str(e)}
+
 def snapshot():
     cfg = _config()
     mismatches = {k: {"expected": v, "actual": cfg.get(k)}
                   for k, v in PARAMS.items() if cfg.get(k) != v}
     return {
         "mode": "read-only",
+        "daemon": _daemon(),
         "awg": _version(),
         "awg_state": _awg_state(),
         "udp_ports": _listen_port(),
