@@ -10,7 +10,7 @@ def apply(nova11):
             ('ОБЗОР', [('⌂','Дашборд','/'), ('◉','Активные клиенты','/active')]),
             ('УПРАВЛЕНИЕ', [('♣','Клиенты','/clients'), ('◇','Конфигурация','/config'), ('◈','Strong Mobile','/obfuscation'), ('🛜','Настроить Keenetic','/keenetic')]),
             ('СИСТЕМА', [('⌘','Сеть и Firewall','/network'), ('◌','Live Traffic','/traffic'), ('✓','Диагностика','/diagnostics'), ('🩺','NOVA Doctor','/doctor'), ('📡','Монитор подключений','/live-monitor'), ('🛠️','AWG Toolza','/awg-toolza'), ('▣','Резервные копии','/backups'), ('☷','Логи','/logs')]),
-            ('ПАНЕЛЬ', [('⚙','Настройки','/settings'), ('ⓘ','О NOVA','/about')]),
+            ('ПАНЕЛЬ', [('⚙','Настройки','/settings'), ('📱','Мобильная диагностика','/mobile-diagnostics'), ('ⓘ','О NOVA','/about')]),
         ]
         out = []
         for title, items in groups:
