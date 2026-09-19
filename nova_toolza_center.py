@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 import socket
 import subprocess
-from flask import jsonify
+from flask import jsonify, request
 
 PARAMS = {
     "Jc":"4","Jmin":"40","Jmax":"120",
@@ -170,6 +170,12 @@ HTML = r'''<style>
 <div class="nova-tz-card"><b id="tz-fwd">—</b><small>IPv4 forwarding</small></div>
 <div class="nova-tz-card"><b id="tz-nat">—</b><small>NAT / MASQUERADE</small></div>
 </div>
+<div class="nova-tz-panel"><b>Управление сервером</b><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">
+<button class="nova-tz-refresh" onclick="novaToolzaAction('apply-profile')">✓ Применить профиль</button>
+<button class="nova-tz-refresh" onclick="novaToolzaAction('repair-nat')">🔧 Исправить NAT</button>
+<button class="nova-tz-refresh" onclick="novaToolzaAction('restart-awg')">↻ Перезапустить AWG</button>
+<button class="nova-tz-refresh" onclick="novaToolzaAction('repair-all')">🛠️ Исправить всё</button>
+</div><small style="display:block;color:#7d899b;margin-top:9px">Изменения выполняются только после подтверждения.</small></div>
 <div class="nova-tz-panel"><b>Профиль NOVA Strong Mobile</b><pre class="nova-tz-pre" id="tz-profile-text">Загрузка…</pre><div id="tz-result"></div></div>
 <div class="nova-tz-panel"><b>RU Access — контроль доступности</b>
 <table class="nova-tz-table"><thead><tr><th>Ресурс</th><th>IPv4</th><th>DNS</th><th>TCP/443</th></tr></thead><tbody id="tz-probes"><tr><td colspan="4">Проверяем…</td></tr></tbody></table>
@@ -177,6 +183,15 @@ HTML = r'''<style>
 <div class="nova-tz-panel"><b>AWG / сеть</b><pre class="nova-tz-pre" id="tz-details">Загрузка…</pre></div>
 </section>
 <script>
+async function novaToolzaAction(action){
+ const labels={'apply-profile':'применить профиль NOVA','repair-nat':'исправить NAT','restart-awg':'перезапустить AWG','repair-all':'выполнить полное исправление'};
+ if(!confirm('Подтвердить: '+(labels[action]||action)+'?')) return;
+ try{
+  const r=await fetch('/api/nova/toolza-action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
+  const d=await r.json(); alert(d.ok?'Операция выполнена: '+action:'Ошибка: '+(d.error||'см. результат'));
+  novaToolzaLoad();
+ }catch(e){alert('Ошибка Toolz: '+e)}
+}
 async function novaToolzaLoad(){
  try{
   const r=await fetch('/api/nova/toolza-center',{cache:'no-store'}); const d=await r.json();
@@ -214,6 +229,18 @@ def apply(nova):
     @app.route("/awg-toolza")
     def awg_toolza():
         return HTML
+    @app.route("/api/nova/toolza-action", methods=["POST"])
+    def api_toolza_action():
+        import json as _json, pathlib as _pathlib, urllib.request as _request
+        body=_json.loads(request.get_data(as_text=True) or "{}")
+        token=_pathlib.Path("/etc/awg-toolz/token").read_text().strip()
+        req=_request.Request("http://127.0.0.1:9090/v1/action",data=_json.dumps(body).encode(),headers={"Content-Type":"application/json","X-NOVA-Toolz-Token":token,"X-NOVA-Confirm":"APPLY"},method="POST")
+        try:
+            with _request.urlopen(req,timeout=35) as f:
+                return jsonify(_json.loads(f.read().decode()))
+        except Exception as e:
+            return jsonify({"ok":False,"error":str(e)}),500
+
     @app.route("/api/nova/toolza-center")
     def api_toolza():
         return jsonify(snapshot())
