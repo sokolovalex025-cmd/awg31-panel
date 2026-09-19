@@ -306,7 +306,7 @@ HTML = r'''<style>
       <div class="nova-tz-panel">
         <div class="nova-tz-panel-title"><span>📊 Сеть</span><span class="nova-tz-badge">live</span></div>
         <div class="nova-tz-mini-grid">
-          <div class="nova-tz-mini"><label>Public IPv4</label><b id="tz-ip">—</b><small><button class="nova-tz-copy" onclick="novaCopy('tz-ip')">копировать</button></small></div>
+          <div class="nova-tz-mini"><label>Public IPv4</label><b id="tz-ip">—</b><small><button class="nova-tz-copy" id="tz-copy-status" onclick="novaCopy('tz-ip')">копировать</button></small></div>
           <div class="nova-tz-mini"><label>ListenPort</label><b id="tz-port-mini">—</b><small>UDP</small></div>
           <div class="nova-tz-mini"><label>Forwarding</label><b id="tz-fwd">—</b><small>IPv4 packet forwarding</small></div>
           <div class="nova-tz-mini"><label>NAT</label><b id="tz-nat">—</b><small>MASQUERADE</small></div>
@@ -333,7 +333,18 @@ HTML = r'''<style>
 <script>
 function novaToolzaTheme(){const el=document.getElementById('nova-toolz');el.classList.toggle('dark');localStorage.setItem('nova-toolz-theme',el.classList.contains('dark')?'dark':'light')}
 (function(){const el=document.getElementById('nova-toolz');if(localStorage.getItem('nova-toolz-theme')==='dark')el.classList.add('dark')})();
-function novaCopy(id){const t=document.getElementById(id).textContent;if(navigator.clipboard)navigator.clipboard.writeText(t).then(()=>{});}
+function novaCopy(id){
+ const t=document.getElementById(id).textContent;
+ if(navigator.clipboard && window.isSecureContext){
+   navigator.clipboard.writeText(t).then(()=>novaCopyDone()).catch(()=>novaCopyFallback(t));
+ }else novaCopyFallback(t);
+}
+function novaCopyFallback(t){
+ const ta=document.createElement('textarea');ta.value=t;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();
+ try{document.execCommand('copy');novaCopyDone();}catch(e){alert('Не удалось скопировать. Скопируйте IPv4 вручную: '+t);}
+ ta.remove();
+}
+function novaCopyDone(){const e=document.getElementById('tz-copy-status');if(e){e.textContent='скопировано';setTimeout(()=>e.textContent='копировать',1500);}}
 function novaClock(){const e=document.getElementById('tz-clock');if(e)e.textContent=new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});}
 async function novaToolzaAction(action){
  const labels={'apply-profile':'применить профиль NOVA','repair-nat':'исправить NAT','restart-awg':'перезапустить AWG','repair-all':'выполнить полное исправление'};
