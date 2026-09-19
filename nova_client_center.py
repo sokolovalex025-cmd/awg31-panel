@@ -188,7 +188,9 @@ def _client_config(row):
         "RejectAfterTime","KeepaliveTimeout","MaxHandshakeAttempts",
         "RandomTrailers","DisableCookies",
     ):
-        value = it.get(key, params.get(key))
+        value = params.get(key)
+        if value is None:
+            value = it.get(key)
         if value is not None and str(value) != "":
             lines.append(f"{key} = {value}")
     hp = it.get("HeaderProtectionKey")
