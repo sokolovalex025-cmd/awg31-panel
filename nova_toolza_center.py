@@ -169,10 +169,12 @@ def _live_snapshot():
             return False
 
     uptime = _run("uptime", "-p") or "unknown"
-    mobile_ready = bool(
-        d.get("profile_ok")
-        and d.get("port")
-        and d.get("online_peers", 0) >= 0
+    readiness_checks = [
+        item for item in (d.get("checks") or [])
+        if item.get("name") != "Recent handshake"
+    ]
+    mobile_ready = bool(readiness_checks) and all(
+        bool(item.get("ok")) for item in readiness_checks
     )
 
     return {
