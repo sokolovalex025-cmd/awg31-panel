@@ -13,7 +13,7 @@ def _load_runtime():
         "nova12_clients",
         "nova_client_center",
         "nova12_ui",
-        "nova_doctor_ui",
+        "nova_doctor_ui",\n        "nova13_status",
     ):
         mod = importlib.import_module(mod_name)
         if hasattr(mod, "apply"):
@@ -26,7 +26,7 @@ def test_final_navigation_contains_all_operational_entries():
     html = app_mod.nav("/awg-toolza")
     for href in (
         "/", "/active", "/clients", "/config", "/obfuscation", "/keenetic",
-        "/network", "/traffic", "/diagnostics", "/doctor", "/live-monitor",
+        "/network", "/traffic", "/diagnostics", "/nova13-status", "/doctor", "/live-monitor",
         "/awg-toolza", "/backups", "/logs", "/settings", "/mobile-diagnostics",
         "/about",
     ):
@@ -41,7 +41,7 @@ def test_core_and_nova_routes_exist_with_expected_methods():
         "/network", "/traffic", "/diagnostics", "/backups", "/backups/create",
         "/logs", "/settings", "/about", "/mobile-diagnostics", "/mobile-diagnostics-v3",
         "/live-monitor", "/api/nova/live-monitor", "/awg-toolza", "/api/nova/toolza-center",
-        "/doctor", "/api/doctor", "/api/nova/toolza-external",
+        "/doctor", "/api/doctor", "/api/nova/toolza-external", "/nova13-status", "/api/nova13/status",
     }
     for route in expected_get:
         assert route in rules, route
