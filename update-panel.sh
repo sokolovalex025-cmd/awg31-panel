@@ -22,7 +22,7 @@ python3 -m venv "$REPO_DIR/venv"
 "$REPO_DIR/venv/bin/pip" install --upgrade pip
 "$REPO_DIR/venv/bin/pip" install Flask 'qrcode[pil]' pytest
 mkdir -p "$BASE/backups"
-for f in app.py app9.py nova11.py nova11_fixes.py panel_bootstrap.py nova12_theme.py nova13_theme.py nova14_theme.py nova15_theme.py nova16_server_card_fix.py nova_scroll_buttons.py nova_awg31_fix.py antiblock.py nova_shield.py nova_resilience.py nova_doctor_ui.py nova_diagnostics.py nova12_diagnostics.py nova_mobile_diagnostics3.py nova_mobile_monitor.py nova_toolza_center.py nova12_clients.py nova12_ui.py domain_manager.py naiveproxy_panel.py telegram_ui.py telegram_bot.py telegram_runner.py telegram_delete.py telegram_payments.py system_panel.py mobile_nav.py security_hardening.py keenetic.py balancer.py balancer_provision.py nova_mobile_diagnostics.py nova_command_center.py background.svg keenetic-routing-guide.txt nova-network-fix.sh nova-max-backup.sh nova-migrate.sh nova-verify.sh nova-watchdog.sh nova-watchdog.service nova-watchdog.timer; do
+for f in app.py app9.py nova11.py nova11_fixes.py panel_bootstrap.py nova12_theme.py nova13_theme.py nova14_theme.py nova15_theme.py nova16_server_card_fix.py nova_scroll_buttons.py nova_awg31_fix.py antiblock.py nova_shield.py nova_resilience.py nova_doctor_ui.py nova_diagnostics.py nova12_diagnostics.py nova_mobile_diagnostics3.py nova_mobile_monitor.py nova_toolza_center.py awg-toolz-daemon.py awg-toolz.service nova12_clients.py nova12_ui.py domain_manager.py naiveproxy_panel.py telegram_ui.py telegram_bot.py telegram_runner.py telegram_delete.py telegram_payments.py system_panel.py mobile_nav.py security_hardening.py keenetic.py balancer.py balancer_provision.py nova_mobile_diagnostics.py nova_command_center.py background.svg keenetic-routing-guide.txt nova-network-fix.sh nova-max-backup.sh nova-migrate.sh nova-verify.sh nova-watchdog.sh nova-watchdog.service nova-watchdog.timer; do
   [ -f "$REPO_DIR/$f" ] && install -m 644 "$REPO_DIR/$f" "$BASE/$f"
 done
 # Keep runtime sources exact; never patch Python bootstrap through sed heuristics.
@@ -33,8 +33,15 @@ install -m 644 "$BASE/nova-watchdog.service" /etc/systemd/system/nova-watchdog.s
 install -m 644 "$BASE/nova-watchdog.timer" /etc/systemd/system/nova-watchdog.timer
 "$REPO_DIR/venv/bin/python" -m py_compile "$BASE"/*.py
 "$REPO_DIR/venv/bin/python" "$BASE/nova_awg31_fix.py"
+mkdir -p /etc/awg-toolz
+umask 077
+[ -s /etc/awg-toolz/token ] || python3 -c "import secrets; print(secrets.token_urlsafe(48))" > /etc/awg-toolz/token
+chmod 600 /etc/awg-toolz/token
+install -m 644 "$BASE/awg-toolz.service" /etc/systemd/system/awg-toolz.service
+chmod 755 "$BASE/awg-toolz-daemon.py"
 systemctl daemon-reload
 systemctl enable --now nova-watchdog.timer
+systemctl enable --now awg-toolz.service
 systemctl restart awg31-network.service 2>/dev/null || true
 systemctl restart awgpanel.service
 sleep 2
@@ -58,7 +65,7 @@ echo 'NOVA UI 12.0: mobile diagnostics navigation + version identity'
 echo 'NOVA Watchdog: every minute'
 echo 'NOVA Sidebar Controls: UP/DOWN'
 echo 'NOVA Command Center: READY'
-echo 'NOVA AWG Toolza Center: /awg-toolza + /api/nova/toolza-center'
+echo 'NOVA AWG Toolz daemon: 127.0.0.1:9090 + /awg-toolza'
 echo 'NOVA 11.1 compatibility fixes: READY'
 echo 'Telegram Bot: UPDATED'
 echo 'AWG 3.1 configuration was migrated and checked.'
