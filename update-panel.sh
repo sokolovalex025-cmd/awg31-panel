@@ -22,13 +22,13 @@ python3 -m venv "$REPO_DIR/venv"
 "$REPO_DIR/venv/bin/pip" install --upgrade pip
 "$REPO_DIR/venv/bin/pip" install Flask 'qrcode[pil]' pytest
 mkdir -p "$BASE/backups"
-for f in app.py app9.py nova11.py nova11_fixes.py panel_bootstrap.py nova12_theme.py nova13_theme.py nova14_theme.py nova15_theme.py nova16_server_card_fix.py nova_scroll_buttons.py nova_awg31_fix.py antiblock.py nova_shield.py nova_resilience.py nova_doctor_ui.py nova_diagnostics.py nova12_diagnostics.py nova_mobile_diagnostics3.py nova_mobile_monitor.py nova_toolza_center.py awg-toolz-daemon.py awg-toolz.service nova12_clients.py nova_client_center.py nova12_ui.py domain_manager.py naiveproxy_panel.py telegram_ui.py telegram_bot.py telegram_runner.py telegram_delete.py telegram_payments.py system_panel.py mobile_nav.py security_hardening.py keenetic.py balancer.py balancer_provision.py nova_mobile_diagnostics.py nova_command_center.py background.svg keenetic-routing-guide.txt nova-network-fix.sh nova-max-backup.sh nova-migrate.sh nova-verify.sh nova-watchdog.sh nova-watchdog.service nova-watchdog.timer; do
+for f in app.py app9.py nova11.py nova11_fixes.py panel_bootstrap.py nova12_theme.py nova13_theme.py nova14_theme.py nova15_theme.py nova16_server_card_fix.py nova_scroll_buttons.py nova_awg31_fix.py antiblock.py nova_shield.py nova_resilience.py nova_doctor_ui.py nova_diagnostics.py nova12_diagnostics.py nova_mobile_diagnostics3.py nova_mobile_monitor.py nova_toolza_center.py nova_toolza_external.py install-awg-toolza.sh awg-toolz-daemon.py awg-toolz.service nova12_clients.py nova_client_center.py nova12_ui.py domain_manager.py naiveproxy_panel.py telegram_ui.py telegram_bot.py telegram_runner.py telegram_delete.py telegram_payments.py system_panel.py mobile_nav.py security_hardening.py keenetic.py balancer.py balancer_provision.py nova_mobile_diagnostics.py nova_command_center.py background.svg keenetic-routing-guide.txt nova-network-fix.sh nova-max-backup.sh nova-migrate.sh nova-verify.sh nova-watchdog.sh nova-watchdog.service nova-watchdog.timer; do
   [ -f "$REPO_DIR/$f" ] && install -m 644 "$REPO_DIR/$f" "$BASE/$f"
 done
 # Keep runtime sources exact; never patch Python bootstrap through sed heuristics.
 # panel_bootstrap.py is copied verbatim from main above. All feature modules are
 # already imported by the canonical bootstrap; do not mutate it with sed.
-chmod 755 "$BASE/nova_awg31_fix.py" "$BASE/nova-network-fix.sh" "$BASE/nova-max-backup.sh" "$BASE/nova-migrate.sh" "$BASE/nova-verify.sh" "$BASE/panel_bootstrap.py" "$BASE/nova-watchdog.sh"
+chmod 755 "$BASE/nova_awg31_fix.py" "$BASE/install-awg-toolza.sh" "$BASE/nova-network-fix.sh" "$BASE/nova-max-backup.sh" "$BASE/nova-migrate.sh" "$BASE/nova-verify.sh" "$BASE/panel_bootstrap.py" "$BASE/nova-watchdog.sh"
 install -m 644 "$BASE/nova-watchdog.service" /etc/systemd/system/nova-watchdog.service
 install -m 644 "$BASE/nova-watchdog.timer" /etc/systemd/system/nova-watchdog.timer
 "$REPO_DIR/venv/bin/python" -m py_compile "$BASE"/*.py
