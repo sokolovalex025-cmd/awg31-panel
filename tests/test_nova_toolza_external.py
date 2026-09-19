@@ -13,7 +13,6 @@ def test_external_toolza_is_pinned_and_non_destructive():
     assert "ecccafa3094181a6962ff71e54527e4771657698" in src
     assert 'subprocess.run' in src
     assert '["--help"]' in src
-    assert 'never' not in ""  # keep test intentionally syntax-only
 
 
 def test_installer_is_bash_syntax_checked():
