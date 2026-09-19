@@ -53,7 +53,7 @@ def nova_nav(path):
     groups=[
         ('ОБЗОР',[('⌂','Дашборд','/'),('◉','Активные клиенты','/active')]),
         ('УПРАВЛЕНИЕ',[('♣','Клиенты','/clients'),('◇','Конфигурация','/config'),('◈','Strong Mobile','/obfuscation'),('🛜','Настроить Keenetic','/keenetic')]),
-        ('СИСТЕМА',[('⌘','Сеть и Firewall','/network'),('◌','Live Traffic','/traffic'),('✓','Диагностика','/diagnostics'),('▣','Резервные копии','/backups'),('☷','Логи','/logs')]),
+        ('СИСТЕМА',[('⌘','Сеть и Firewall','/network'),('◌','Live Traffic','/traffic'),('✓','Диагностика','/diagnostics'),('📡','Монитор подключений','/live-monitor'),('🛠️','AWG Toolza','/awg-toolza'),('▣','Резервные копии','/backups'),('☷','Логи','/logs')]),
         ('ПАНЕЛЬ',[('⚙','Настройки','/settings'),('ⓘ','О NOVA','/about')])]
     out=[]
     for title,items in groups:
