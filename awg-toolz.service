@@ -13,6 +13,6 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=true
-ReadWritePaths=/etc/awg-toolz
+ReadWritePaths=/etc/awg-toolz /etc/amnezia/amneziawg
 [Install]
 WantedBy=multi-user.target
