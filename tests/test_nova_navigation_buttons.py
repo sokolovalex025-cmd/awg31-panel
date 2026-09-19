@@ -13,7 +13,8 @@ def _load_runtime():
         "nova12_clients",
         "nova_client_center",
         "nova12_ui",
-        "nova_doctor_ui",\n        "nova13_status",
+        "nova_doctor_ui",
+        "nova13_status",
     ):
         mod = importlib.import_module(mod_name)
         if hasattr(mod, "apply"):
