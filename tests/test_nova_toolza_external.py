@@ -20,3 +20,5 @@ def test_installer_is_bash_syntax_checked():
     assert 'bash -n "$tmp"' in src
     assert "NOVA awg0.conf was not modified." in src
     assert "ecccafa3094181a6962ff71e54527e4771657698" in src
+
+# Focused CI smoke coverage for the external Toolza bridge.
