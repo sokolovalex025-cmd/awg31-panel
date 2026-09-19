@@ -146,6 +146,8 @@ def snapshot():
                   for k, v in PARAMS.items() if cfg.get(k) != v}
     return {
         "mode": "read-only",
+        "external_toolza_control": "blocked",
+        "external_toolza_note": "NOVA only inspects /usr/local/bin/awg2; web requests never execute external Toolza.",
         "external_toolza": _external_toolza(),
         "daemon": _daemon(),
         "awg": _version(),
@@ -212,7 +214,7 @@ HTML = r'''<style>
     <main>
       <div class="nova-tz-panel">
         <div class="nova-tz-panel-title"><span>⚙️ Управление сервером</span><span class="nova-tz-badge">confirmation required</span></div>
-        <div class="nova-tz-panel-sub">Все изменяющие операции выполняются через локальный Toolz daemon.</div>
+        <div class="nova-tz-panel-sub">Изменяющие операции выполняются только NOVA Toolz daemon на 127.0.0.1:9090. Внешний /usr/local/bin/awg2 из веб-панели не запускается.</div>
         <div class="nova-tz-action-grid">
           <button class="nova-tz-action primary" onclick="novaToolzaAction('apply-profile')">✓ &nbsp; Применить профиль<small>Canonical NOVA Strong Mobile</small></button>
           <button class="nova-tz-action" onclick="novaToolzaAction('repair-nat')">🔧 &nbsp; Исправить NAT<small>Проверка MASQUERADE</small></button>
@@ -224,7 +226,7 @@ HTML = r'''<style>
 
       <div class="nova-tz-panel">
         <div class="nova-tz-panel-title"><span>🧩 AWG Toolza</span><span class="nova-tz-badge">external CLI</span></div>
-        <div class="nova-tz-panel-sub">Совместимость с внешним AWG Toolza. NOVA не запускает его из веб-интерфейса и не передаёт ему управление awg0 автоматически.</div>
+        <div class="nova-tz-panel-sub">Совместимость с внешним AWG Toolza. NOVA показывает только наличие и версию /usr/local/bin/awg2. Запуск внешнего Toolza из веб-интерфейса запрещён; awg0 остаётся под контролем NOVA.</div>
         <div class="nova-tz-mini-grid">
           <div class="nova-tz-mini"><label>Статус</label><b id="tz-external">Проверяем…</b><small id="tz-external-version">—</small></div>
           <div class="nova-tz-mini"><label>Версия</label><b>v0.8.25</b><small>pinned upstream</small></div>
@@ -291,7 +293,7 @@ async function novaToolzaLoad(){
   document.getElementById('tz-external').textContent=ext.installed?'INSTALLED':'NOT INSTALLED';
   document.getElementById('tz-external').className=cls(ext.installed);
   document.getElementById('tz-external-version').textContent=ext.version||'Команда awg2 не найдена';
-  document.getElementById('tz-external-note').textContent=ext.installed?'✓ AWG Toolza обнаружен. NOVA сохраняет управление awg0 за своей конфигурацией.':'ℹ️ Установить можно через /opt/awg31-panel/install-awg-toolza.sh';
+  document.getElementById('tz-external-note').textContent=ext.installed?'✓ AWG Toolza обнаружен. Только чтение: запуск из веб-панели заблокирован.':'ℹ️ Установить можно через /opt/awg31-panel/install-awg-toolza.sh';
   const bad=Object.entries(d.mismatches||{}).map(x=>x[0]+': expected '+x[1].expected+', actual '+x[1].actual);
   document.getElementById('tz-result').className='nova-tz-status '+(d.profile_ok?'nova-tz-ok':'nova-tz-bad');document.getElementById('tz-result').innerHTML=d.profile_ok?'✓ Canonical profile совпадает':'⚠ '+bad.join(' · ');
   document.getElementById('tz-probes').innerHTML=(d.probes||[]).map(p=>'<tr><td><strong>'+p.name+'</strong><small>'+p.host+'</small></td><td>'+((p.ipv4||[]).join(', ')||'—')+'</td><td class="'+cls(p.dns_ok)+'"><span class="nova-tz-dot"></span>'+(p.dns_ok?'OK':'FAIL')+'</td><td class="'+cls(p.tcp_ok)+'"><span class="nova-tz-dot"></span>'+(p.tcp_ok?'OPEN':'FAIL')+'</td></tr>').join('');
