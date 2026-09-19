@@ -4,7 +4,7 @@ set -Eeuo pipefail
 BASE=/opt/awg31-panel; REPO_DIR=${REPO_DIR:-/root/awg31-panel}; FAIL=0
 ok(){ printf '  [OK]   %s\n' "$*"; }; bad(){ printf '  [FAIL] %s\n' "$*"; FAIL=1; }; check(){ if "$@" >/dev/null 2>&1; then ok "$*"; else bad "$*"; fi; }
 echo '=== NOVA MAX verification ==='
-for f in app.py nova11.py panel_bootstrap.py nova14_theme.py antiblock.py nova_shield.py nova_resilience.py domain_manager.py telegram_bot.py telegram_runner.py keenetic.py balancer.py balancer_provision.py nova_mobile_diagnostics.py nova_awg31_fix.py nova-watchdog.sh nova-watchdog.service nova-watchdog.timer nova-max-backup.sh nova-migrate.sh; do [ -f "$BASE/$f" ] && ok "file $f" || bad "missing $BASE/$f"; done
+for f in app.py nova11.py panel_bootstrap.py nova14_theme.py antiblock.py nova_shield.py nova_resilience.py domain_manager.py telegram_bot.py telegram_runner.py keenetic.py balancer.py balancer_provision.py nova_mobile_diagnostics.py nova_awg31_fix.py nova-watchdog.sh nova-watchdog.service nova-watchdog.timer nova-max-backup.sh nova-migrate.sh nova13_status.py; do [ -f "$BASE/$f" ] && ok "file $f" || bad "missing $BASE/$f"; done
 PY="$REPO_DIR/venv/bin/python"; [ -x "$PY" ] || PY=python3
 for f in "$BASE"/*.py; do "$PY" -m py_compile "$f" >/dev/null 2>&1 && ok "python syntax $(basename "$f")" || bad "python syntax $(basename "$f")"; done
 for f in nova-watchdog.sh nova-max-backup.sh nova-migrate.sh; do [ -x "$BASE/$f" ] && ok "$f executable" || bad "$f executable"; done
@@ -25,6 +25,8 @@ if grep -q "nova_resilience" "$BASE/panel_bootstrap.py"; then ok 'resilience reg
 if grep -q "nova_shield" "$BASE/panel_bootstrap.py"; then ok 'shield registered'; else bad 'shield not registered'; fi
 if grep -q "domain_manager" "$BASE/panel_bootstrap.py"; then ok 'domain manager registered'; else bad 'domain manager not registered'; fi
 if grep -q "nova_awg31_fix" "$BASE/panel_bootstrap.py"; then ok 'AWG 3.1 guard registered'; else bad 'AWG 3.1 guard not registered'; fi
+if grep -q "nova13_status" "$BASE/panel_bootstrap.py"; then ok 'NOVA 13 Status Center registered'; else bad 'NOVA 13 Status Center not registered'; fi
+if "$PY" -c 'import nova13_status; assert hasattr(nova13_status,"apply")' >/dev/null 2>&1; then ok 'NOVA 13 Status module loaded'; else bad 'NOVA 13 Status module missing'; fi
 if "$PY" -c 'import nova_resilience; assert hasattr(nova_resilience,"doctor") and hasattr(nova_resilience,"auto_fix")' >/dev/null 2>&1; then ok 'NOVA Doctor API loaded'; else bad 'NOVA Doctor API missing'; fi
 printf '\n=== Result ===\n'
 if [ "$FAIL" -eq 0 ]; then echo 'NOVA MAX verification: PASS'; echo 'Verification does not modify awg0.'; exit 0; else echo 'NOVA MAX verification: FAIL'; exit 10; fi
