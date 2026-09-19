@@ -45,3 +45,9 @@ def test_probe_reports_dns_and_tcp_separately(monkeypatch):
     assert d["dns_ok"] is True
     assert d["tcp_ok"] is False
     assert d["ipv4"] == ["203.0.113.10"]
+
+
+def test_daemon_request_failure_is_safe(monkeypatch):
+    monkeypatch.setattr(m, "_daemon", lambda: {"ok": False, "error": "not running"})
+    d = m.snapshot()
+    assert d["daemon"]["ok"] is False
