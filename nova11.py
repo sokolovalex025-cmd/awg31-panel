@@ -71,6 +71,7 @@ ORIGINAL_LAYOUT = core.layout
 def nova_layout(title, body, path):
     html=ORIGINAL_LAYOUT(title, body, path)
     html=html.replace('NOVA <span>10</span>','NOVA <span>12</span>')
+    html=html.replace('NOVA 10.0','NOVA 12.0')
     html=html.replace('NOVA Network Control Center · AmneziaWG 3.1 · v10.0','NOVA Network Control Center · AmneziaWG 3.1 · v12.0')
     html=html.replace("background.svg?v=NOVA'", "background.svg?v=NOVA12'")
     float_link='<a class="nova-float" href="/keenetic">🛜 <span>Keenetic</span></a>'
