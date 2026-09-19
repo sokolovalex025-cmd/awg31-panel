@@ -251,7 +251,7 @@ HTML = r'''<style>
   <div class="nova-tz-hero">
     <div class="nova-tz-head">
       <div class="nova-tz-brand"><div class="nova-tz-logo">N</div><div><h2 class="nova-tz-title">NOVA AWG Toolz <span class="nova-tz-badge">2.0</span></h2><div class="nova-tz-sub">AWG 3.1 • Server Control Center • диагностика и подтверждённые операции</div></div></div>
-      <div class="nova-tz-actions-top"><button class="nova-tz-btn" onclick="novaToolzaLoad()">↻ Обновить</button><button class="nova-tz-btn" onclick="novaToolzaTheme()" title="Сменить тему">☼ / ☾</button></div>
+      <div class="nova-tz-actions-top"><a class="nova-tz-btn" href="/clients">👥 Клиенты</a><a class="nova-tz-btn" href="/clients#new-client">＋ Создать клиента</a><button class="nova-tz-btn" onclick="novaToolzaLoad()">↻ Обновить</button><button class="nova-tz-btn" onclick="novaToolzaTheme()" title="Сменить тему">☼ / ☾</button></div>
     </div>
     <div class="nova-tz-livebar"><div class="nova-tz-live"><i></i><span id="tz-live">Проверка состояния…</span></div><div class="nova-tz-sync">Автообновление: 15 сек • <span id="tz-clock">—</span></div></div>
   </div>
@@ -385,7 +385,7 @@ def apply(nova):
     app = nova.core.app
     @app.route("/awg-toolza")
     def awg_toolza():
-        return HTML
+        return nova.core.layout("NOVA AWG Toolz", HTML, "/awg-toolza")
     @app.route("/api/nova/toolza-action", methods=["POST"])
     def api_toolza_action():
         import json as _json, pathlib as _pathlib, urllib.request as _request
