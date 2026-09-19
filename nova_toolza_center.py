@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 import socket
 import subprocess
+import shutil
 from flask import jsonify, request
 
 PARAMS = {
