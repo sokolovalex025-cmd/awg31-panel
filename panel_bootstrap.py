@@ -68,7 +68,13 @@ except Exception as e: print('NOVA Resilience disabled:',e,flush=True)
 try:
     import nova_doctor_ui; nova_doctor_ui.apply(nova11)
 except Exception as e: print('NOVA Doctor UI disabled:',e,flush=True)
-try:\n    import nova13_status; nova13_status.apply(nova11); print('NOVA 13 Status Center: READY',flush=True)\nexcept Exception as e: print('NOVA 13 Status Center disabled:',e,flush=True)\ntry: import domain_manager; domain_manager.apply(nova11.core.app)
+try:
+    import nova13_status
+    nova13_status.apply(nova11)
+    print('NOVA 13 Status Center: READY',flush=True)
+except Exception as e:
+    print('NOVA 13 Status Center disabled:',e,flush=True)
+try: import domain_manager; domain_manager.apply(nova11.core.app)
 except Exception as e: print('NOVA domain manager disabled:',e,flush=True)
 try:
     import nova_command_center
