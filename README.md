@@ -139,3 +139,24 @@ curl -fsSL https://raw.githubusercontent.com/sokolovalex025-cmd/awg31-panel/main
 chmod +x /root/install-nova-ui.sh
 sudo /root/install-nova-ui.sh
 ```
+
+
+## NOVA X-ray Free 1.0.0
+
+Полная панель управления Xray + AmneziaWG с современным интерфейсом. Установщик автоматически ставит Xray, создаёт VLESS Reality, управляет inbound/клиентами, проверяет конфигурацию перед применением, делает backup/rollback и показывает диагностику и логи.
+
+### Установка
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sokolovalex025-cmd/awg31-panel/main/install-nova-xray-free.sh -o /root/install-nova-xray-free.sh
+chmod +x /root/install-nova-xray-free.sh
+sudo /root/install-nova-xray-free.sh
+```
+
+Панель: `http://IP_VPS:9091`
+
+Сервис: `nova-xray-free.service`
+
+Xray: `xray.service`
+
+Основные функции: Dashboard, VLESS Reality, Trojan, Shadowsocks, клиенты, готовые URI, применение с проверкой, backup/rollback, диагностика, управление сервисами и просмотр логов.
