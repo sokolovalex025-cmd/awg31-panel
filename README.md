@@ -129,3 +129,13 @@ nova-network-fix.sh       NAT/forwarding/firewall fix
 nova-verify.sh            production verification
 update-panel.sh           one-command updater
 ```
+
+## NOVA-UI one-command installer
+
+Установка NOVA-UI без ZIP/unzip:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sokolovalex025-cmd/awg31-panel/main/install-nova-ui.sh -o /root/install-nova-ui.sh
+chmod +x /root/install-nova-ui.sh
+sudo /root/install-nova-ui.sh
+```
