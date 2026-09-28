@@ -3,7 +3,6 @@ from __future__ import annotations
 import html
 import json
 import os
-import re
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -34,9 +33,36 @@ def db() -> sqlite3.Connection:
         """CREATE TABLE IF NOT EXISTS users(
             telegram_id INTEGER PRIMARY KEY,
             username TEXT,
-            client_name TEXT UNIQUE,
+            client_name TEXT,
+            access_id TEXT,
             created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
         )"""
+    )
+
+    columns = {
+        row["name"]
+        for row in conn.execute("PRAGMA table_info(users)").fetchall()
+    }
+    if "client_name" not in columns:
+        conn.execute("ALTER TABLE users ADD COLUMN client_name TEXT")
+    if "access_id" not in columns:
+        conn.execute("ALTER TABLE users ADD COLUMN access_id TEXT")
+
+    # Older bot versions stored the Bandju identifier as access_id. For the
+    # confirmed AmneziaWG API the identifier is the client name.
+    rows = conn.execute(
+        "SELECT telegram_id, access_id FROM users "
+        "WHERE (client_name IS NULL OR client_name='') AND access_id IS NOT NULL"
+    ).fetchall()
+    for row in rows:
+        conn.execute(
+            "UPDATE users SET client_name=? WHERE telegram_id=?",
+            (str(row["access_id"]), row["telegram_id"]),
+        )
+
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_client_name "
+        "ON users(client_name) WHERE client_name IS NOT NULL"
     )
     conn.commit()
     return conn
@@ -54,12 +80,13 @@ def get_user(uid: int):
 def save_user(uid: int, username: str, client_name: str) -> None:
     conn = db()
     conn.execute(
-        """INSERT INTO users(telegram_id, username, client_name)
-           VALUES(?,?,?)
+        """INSERT INTO users(telegram_id, username, client_name, access_id)
+           VALUES(?,?,?,?)
            ON CONFLICT(telegram_id) DO UPDATE SET
              username=excluded.username,
-             client_name=excluded.client_name""",
-        (uid, username, client_name),
+             client_name=excluded.client_name,
+             access_id=excluded.access_id""",
+        (uid, username, client_name, client_name),
     )
     conn.commit()
     conn.close()
@@ -299,10 +326,7 @@ async def renew(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def toggle_client(
-    update: Update,
-    enabled: bool,
-) -> None:
+async def toggle_client(update: Update, enabled: bool) -> None:
     message = update.effective_message
     user = update.effective_user
     if not message or not user:
