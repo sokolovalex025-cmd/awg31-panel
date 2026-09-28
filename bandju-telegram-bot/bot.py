@@ -121,10 +121,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def health(update: Update, context: ContextTypes.DEFAULT_TYPE):
     r = await api.health()
+    message = update.effective_message
+    if not message:
+        return
     if r.ok:
-        await update.message.reply_text("🟢 Bandju API доступен.\n\n" + html.escape(json.dumps(r.data, ensure_ascii=False)[:1500]))
+        await message.reply_text("🟢 Bandju API доступен.\n\n" + html.escape(json.dumps(r.data, ensure_ascii=False)[:1500]))
     else:
-        await update.message.reply_text("🔴 Bandju API недоступен.\n" + html.escape(r.error))
+        await message.reply_text("🔴 Bandju API недоступен.\n" + html.escape(r.error))
 
 
 async def get_vpn(update: Update, context: ContextTypes.DEFAULT_TYPE):
