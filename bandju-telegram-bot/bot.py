@@ -17,6 +17,7 @@ load_dotenv("/etc/bandju-telegram-bot/.env")
 DB_PATH = Path("/var/lib/bandju-telegram-bot/bot.db")
 DEFAULT_DAYS = int(os.getenv("DEFAULT_DAYS", "30"))
 PROTOCOL = os.getenv("VPN_PROTOCOL", "amneziawg")
+MUTATIONS_ENABLED = os.getenv("BANDJU_MUTATIONS_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
 
 api = BandjuAPI()
 
@@ -110,10 +111,11 @@ def extract_connection(data: Any) -> str | None:
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    mode = "только проверка и просмотр" if not MUTATIONS_ENABLED else "управление доступом"
     await update.message.reply_text(
         "🚀 <b>Bandju VPN Bot</b>\n\n"
-        "Бот управляет VPN-доступом через Bandju Panel.\n"
-        "Выберите действие ниже.",
+        "Режим: <b>" + mode + "</b>\n"
+        "Бот работает через локальный API Bandju Panel.",
         parse_mode="HTML",
         reply_markup=keyboard(),
     )
@@ -131,6 +133,14 @@ async def health(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def get_vpn(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not MUTATIONS_ENABLED:
+        await update.effective_message.reply_text(
+            "🔒 Создание VPN временно отключено.\n"
+            "Сейчас бот работает в безопасном режиме и ничего не изменяет в Bandju Panel.",
+            reply_markup=keyboard(),
+        )
+        return
+
     uid = update.effective_user.id
     username = update.effective_user.username or ""
     existing = get_user(uid)
@@ -162,8 +172,7 @@ async def get_vpn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     connection = extract_connection(r.data)
     if not access_id:
         await update.effective_message.reply_text(
-            "⚠️ Bandju создал ответ, но бот не смог определить ID доступа. "
-            "Посмотри ответ API в журнале сервиса.",
+            "⚠️ Bandju вернул ответ, но бот не смог определить ID доступа.",
             reply_markup=keyboard(),
         )
         return
@@ -195,6 +204,14 @@ async def my_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def renew(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not MUTATIONS_ENABLED:
+        await update.effective_message.reply_text(
+            "🔒 Продление временно отключено.\n"
+            "Сейчас бот не выполняет никаких изменений в Bandju Panel.",
+            reply_markup=keyboard(),
+        )
+        return
+
     uid = update.effective_user.id
     user = get_user(uid)
     if not user or not user["access_id"]:
@@ -241,7 +258,7 @@ async def admin_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         paths = list((r["openapi"].get("paths") or {}).keys())
         msg = "🛠 <b>Bandju API</b>\n\n" + "\n".join(paths[:100])
     else:
-        msg = "⚠️ OpenAPI schema не найдена. Используются fallback endpoints."
+        msg = "⚠️ OpenAPI schema не найдена. Безопасный режим остаётся включённым."
     await update.message.reply_text(msg, parse_mode="HTML")
 
 
