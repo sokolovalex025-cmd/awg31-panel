@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 APP=/opt/bandju-telegram-bot
 ENV_DIR=/etc/bandju-telegram-bot
 DATA=/var/lib/bandju-telegram-bot
@@ -10,7 +11,7 @@ apt-get install -y python3 python3-venv curl
 
 install -d -m 0750 "$APP" "$ENV_DIR" "$DATA"
 
-cp -a . "$APP/"
+cp -a "$SCRIPT_DIR"/. "$APP/"
 
 python3 -m venv "$APP/venv"
 "$APP/venv/bin/pip" install --upgrade pip
