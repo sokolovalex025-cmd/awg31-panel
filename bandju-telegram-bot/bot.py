@@ -16,7 +16,6 @@ from bandju_api import BandjuAPI
 load_dotenv("/etc/bandju-telegram-bot/.env")
 
 DB_PATH = Path("/var/lib/bandju-telegram-bot/bot.db")
-DEFAULT_DAYS = int(os.getenv("DEFAULT_DAYS", "30"))
 MUTATIONS_ENABLED = os.getenv("BANDJU_MUTATIONS_ENABLED", "0").strip().lower() in {
     "1", "true", "yes", "on",
 }
@@ -38,18 +37,12 @@ def db() -> sqlite3.Connection:
             created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
         )"""
     )
-
-    columns = {
-        row["name"]
-        for row in conn.execute("PRAGMA table_info(users)").fetchall()
-    }
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
     if "client_name" not in columns:
         conn.execute("ALTER TABLE users ADD COLUMN client_name TEXT")
     if "access_id" not in columns:
         conn.execute("ALTER TABLE users ADD COLUMN access_id TEXT")
 
-    # Older bot versions stored the Bandju identifier as access_id. For the
-    # confirmed AmneziaWG API the identifier is the client name.
     rows = conn.execute(
         "SELECT telegram_id, access_id FROM users "
         "WHERE (client_name IS NULL OR client_name='') AND access_id IS NOT NULL"
@@ -70,9 +63,7 @@ def db() -> sqlite3.Connection:
 
 def get_user(uid: int):
     conn = db()
-    row = conn.execute(
-        "SELECT * FROM users WHERE telegram_id=?", (uid,)
-    ).fetchone()
+    row = conn.execute("SELECT * FROM users WHERE telegram_id=?", (uid,)).fetchone()
     conn.close()
     return row
 
@@ -88,6 +79,13 @@ def save_user(uid: int, username: str, client_name: str) -> None:
              access_id=excluded.access_id""",
         (uid, username, client_name, client_name),
     )
+    conn.commit()
+    conn.close()
+
+
+def clear_user(uid: int) -> None:
+    conn = db()
+    conn.execute("UPDATE users SET client_name=NULL, access_id=NULL WHERE telegram_id=?", (uid,))
     conn.commit()
     conn.close()
 
@@ -115,9 +113,21 @@ def keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("📱 Мой доступ", callback_data="my"),
             InlineKeyboardButton("♻️ Продлить", callback_data="renew"),
         ],
+        [
+            InlineKeyboardButton("🟢 Включить", callback_data="enable"),
+            InlineKeyboardButton("🔴 Выключить", callback_data="disable"),
+        ],
+        [InlineKeyboardButton("🗑 Удалить доступ", callback_data="delete")],
         [InlineKeyboardButton("🩺 Проверка", callback_data="health")],
         [InlineKeyboardButton("ℹ️ Помощь", callback_data="help")],
     ])
+
+
+def delete_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("⚠️ Да, удалить", callback_data="delete_confirm"),
+        InlineKeyboardButton("Отмена", callback_data="delete_cancel"),
+    ]])
 
 
 def _unwrap(data: Any) -> Any:
@@ -149,7 +159,6 @@ def _client_from_data(data: Any, name: str) -> dict[str, Any] | None:
 
 
 def extract_connection(data: Any) -> str | None:
-    """Find a config/link/artifact string without assuming one exact response shape."""
     if isinstance(data, dict):
         for key in (
             "config", "config_text", "configuration", "link",
@@ -159,8 +168,7 @@ def extract_connection(data: Any) -> str | None:
             if isinstance(value, str) and value.strip():
                 return value.strip()
         for key in ("artifact", "access", "client", "data", "row"):
-            value = data.get(key)
-            found = extract_connection(value)
+            found = extract_connection(data.get(key))
             if found:
                 return found
     elif isinstance(data, list):
@@ -204,8 +212,7 @@ async def health(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     else:
         await message.reply_text(
-            "🔴 <b>Bandju API недоступен</b>\n"
-            + html.escape(result.error),
+            "🔴 <b>Bandju API недоступен</b>\n" + html.escape(result.error),
             parse_mode="HTML",
         )
 
@@ -230,19 +237,16 @@ async def get_vpn(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     client_name = safe_name(user.id)
     result = await api.create_amnezia_client(client_name, BANDJU_CONTAINER)
-
     if not result.ok:
         await message.reply_text(
             "❌ Bandju не создал клиента.\n\n"
-            f"HTTP: {result.status_code}\n"
-            + html.escape(result.error)[:1200],
+            f"HTTP: {result.status_code}\n" + html.escape(result.error)[:1200],
             parse_mode="HTML",
             reply_markup=keyboard(),
         )
         return
 
     save_user(user.id, user.username or "", client_name)
-
     connection = extract_connection(result.data)
     text = (
         "✅ <b>VPN-доступ создан</b>\n\n"
@@ -255,12 +259,7 @@ async def get_vpn(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "\n\nBandju создал клиента, но в ответе не найден текст конфигурации. "
             "Откройте «Мой доступ»."
         )
-
-    await message.reply_text(
-        text,
-        parse_mode="HTML",
-        reply_markup=keyboard(),
-    )
+    await message.reply_text(text, parse_mode="HTML", reply_markup=keyboard())
 
 
 async def my_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -271,10 +270,7 @@ async def my_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     row = get_user(user.id)
     if not row or not row["client_name"]:
-        await message.reply_text(
-            "У вас ещё нет VPN-доступа.",
-            reply_markup=keyboard(),
-        )
+        await message.reply_text("У вас ещё нет VPN-доступа.", reply_markup=keyboard())
         return
 
     client_name = row["client_name"]
@@ -289,7 +285,6 @@ async def my_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     client = _client_from_data(result.data, client_name) or result.data
     body = json.dumps(client, ensure_ascii=False, indent=2)[:3500]
-
     connection = extract_connection(result.data)
     text = (
         "📱 <b>Мой VPN-доступ</b>\n\n"
@@ -300,12 +295,10 @@ async def my_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += f"Статус: <b>{'включён' if client['enabled'] else 'выключен'}</b>\n"
         if client.get("ip"):
             text += f"IP: <code>{html.escape(str(client['ip']))}</code>\n"
-
     if connection:
         text += "\n<pre>" + html.escape(connection) + "</pre>"
     else:
         text += "\n\n<pre>" + html.escape(body) + "</pre>"
-
     await message.reply_text(text, parse_mode="HTML", reply_markup=keyboard())
 
 
@@ -314,11 +307,9 @@ async def renew(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if not message or not user:
         return
-
     if not MUTATIONS_ENABLED:
         await message.reply_text(mutations_blocked_text(), reply_markup=keyboard())
         return
-
     await message.reply_text(
         "ℹ️ В Bandju 1.9.0 пока не найден подтверждённый API продления срока "
         "AmneziaWG-клиента. Я не буду отправлять непроверенный запрос.",
@@ -331,7 +322,6 @@ async def toggle_client(update: Update, enabled: bool) -> None:
     user = update.effective_user
     if not message or not user:
         return
-
     if not MUTATIONS_ENABLED:
         await message.reply_text(mutations_blocked_text(), reply_markup=keyboard())
         return
@@ -341,9 +331,7 @@ async def toggle_client(update: Update, enabled: bool) -> None:
         await message.reply_text("У вас нет VPN-доступа.", reply_markup=keyboard())
         return
 
-    result = await api.toggle_amnezia_client(
-        row["client_name"], enabled, BANDJU_CONTAINER
-    )
+    result = await api.toggle_amnezia_client(row["client_name"], enabled, BANDJU_CONTAINER)
     if result.ok:
         await message.reply_text(
             f"{'🟢' if enabled else '🔴'} Клиент "
@@ -354,8 +342,62 @@ async def toggle_client(update: Update, enabled: bool) -> None:
         )
     else:
         await message.reply_text(
-            "❌ Bandju не выполнил операцию.\n"
-            + html.escape(result.error)[:1200],
+            "❌ Bandju не выполнил операцию.\n" + html.escape(result.error)[:1200],
+            parse_mode="HTML",
+            reply_markup=keyboard(),
+        )
+
+
+async def delete_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.effective_message
+    user = update.effective_user
+    if not message or not user:
+        return
+    if not MUTATIONS_ENABLED:
+        await message.reply_text(mutations_blocked_text(), reply_markup=keyboard())
+        return
+
+    row = get_user(user.id)
+    if not row or not row["client_name"]:
+        await message.reply_text("У вас нет VPN-доступа.", reply_markup=keyboard())
+        return
+
+    await message.reply_text(
+        f"⚠️ Удалить VPN-клиента <code>{html.escape(row['client_name'])}</code>?\n"
+        "Действие необратимо.",
+        parse_mode="HTML",
+        reply_markup=delete_keyboard(),
+    )
+
+
+async def delete_client_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    message = query.message if query else None
+    user = update.effective_user
+    if not query or not message or not user:
+        return
+    await query.answer()
+
+    if not MUTATIONS_ENABLED:
+        await message.reply_text(mutations_blocked_text(), reply_markup=keyboard())
+        return
+
+    row = get_user(user.id)
+    if not row or not row["client_name"]:
+        await message.reply_text("У вас нет VPN-доступа.", reply_markup=keyboard())
+        return
+
+    client_name = row["client_name"]
+    result = await api.delete_amnezia_client(client_name, BANDJU_CONTAINER)
+    if result.ok:
+        clear_user(user.id)
+        await message.reply_text(
+            "🗑 VPN-доступ удалён.",
+            reply_markup=keyboard(),
+        )
+    else:
+        await message.reply_text(
+            "❌ Bandju не удалил клиента.\n" + html.escape(result.error)[:1200],
             parse_mode="HTML",
             reply_markup=keyboard(),
         )
@@ -373,6 +415,16 @@ async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await my_access(update, context)
     elif query.data == "renew":
         await renew(update, context)
+    elif query.data == "enable":
+        await toggle_client(update, True)
+    elif query.data == "disable":
+        await toggle_client(update, False)
+    elif query.data == "delete":
+        await delete_client(update, context)
+    elif query.data == "delete_confirm":
+        await delete_client_confirm(update, context)
+    elif query.data == "delete_cancel":
+        await query.message.reply_text("Отмена.", reply_markup=keyboard())
     elif query.data == "health":
         await health(update, context)
     elif query.data == "help":
@@ -391,14 +443,11 @@ async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or not admin(update.effective_user.id):
         return
-
     result = await api.status()
     if result.ok:
         body = json.dumps(result.data, ensure_ascii=False, indent=2)[:3000]
         await update.effective_message.reply_text(
-            "<b>Bandju API status</b>\n<pre>"
-            + html.escape(body)
-            + "</pre>",
+            "<b>Bandju API status</b>\n<pre>" + html.escape(body) + "</pre>",
             parse_mode="HTML",
         )
     else:
