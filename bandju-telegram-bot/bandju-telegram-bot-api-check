@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BASE=${BANDJU_API_BASE:-http://127.0.0.1:7777}
+
+echo "=== Bandju API ==="
+echo "Base: $BASE"
+echo
+
+for p in /health /api/health /api/status /status /openapi.json /api/openapi.json; do
+  code=$(curl -sS -o /tmp/bandju-api-check.out -w '%{http_code}' --max-time 5 "$BASE$p" || true)
+  echo "$code  $p"
+  if [[ "$code" == "200" ]]; then
+    head -c 500 /tmp/bandju-api-check.out
+    echo
+  fi
+done
+
+echo
+echo "=== Listening ports ==="
+ss -ltnp | grep -E '(:7777|bandju|docker-proxy)' || true
+
+echo
+echo "If OpenAPI is unavailable, inspect the Bandju container routes locally."
