@@ -1,0 +1,25 @@
+name: NOVA VPN Bot checks
+
+on:
+  push:
+    branches: [main, feature/nova-vpn-bot]
+  pull_request:
+    paths:
+      - "nurvpn/**"
+      - ".github/workflows/nurvpn-check.yml"
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: nurvpn
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile Python
+        run: python -m compileall -q .
+      - name: Check installer
+        run: bash -n install.sh
