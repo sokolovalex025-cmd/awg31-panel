@@ -1,70 +1,79 @@
 # Bandju Telegram Bot
 
-Telegram bot integration for Bandju Panel.
+Telegram bot integration for Bandju Panel 1.9.x.
+
+## Current Bandju 1.9.0 integration
+
+The bot uses Bandju's local HTTP API at `http://127.0.0.1:7777`.
+
+Confirmed routes used by this bot:
+- `GET /api/health`
+- `GET /api/status`
+- `GET /api/amneziawg/clients`
+- `POST /api/amneziawg/clients`
+- `POST /api/amneziawg/clients/<client_name>/toggle`
+- `DELETE /api/amneziawg/clients/<client_name>`
+
+The bot does not modify Bandju's Docker/Xray/AWG files directly.
 
 ## Safe mode
 
-The bot starts in **read-only mode** by default:
+Default: `BANDJU_MUTATIONS_ENABLED=0`.
 
-`BANDJU_MUTATIONS_ENABLED=0`
+Safe mode permits health/status and reading an associated client. Creation, enable/disable and deletion remain blocked.
 
-In this mode the bot can:
-- check Bandju API health;
-- discover OpenAPI routes when available;
-- read an existing access associated with a Telegram user.
-
-It cannot create, renew, enable, or disable Bandju access. The safety check is enforced in the bot code, not only by UI.
-
-After the actual Bandju 1.9.0 API routes are verified, set:
-
-`BANDJU_MUTATIONS_ENABLED=1`
-
-and configure explicit endpoint overrides if necessary.
-
-## Architecture
-
-Telegram -> Bot -> Bandju local API (127.0.0.1) -> XRay / AmneziaWG / Hysteria2 / MTProto
-
-The bot is intended to run on the same VPS as Bandju Panel. Bandju's API is local-only, so no panel API port needs to be exposed to the Internet.
+Set `BANDJU_MUTATIONS_ENABLED=1` only after the VPS API checks pass. Renewal remains disabled because a confirmed Bandju 1.9.0 AmneziaWG renewal endpoint has not been identified.
 
 ## Installation
 
-1. Create a Telegram bot with BotFather and copy its token.
-2. On the Bandju VPS run:
+On the Bandju VPS:
 
 ```bash
+cd /path/to/awg31-panel/bandju-telegram-bot
 sudo bash install.sh
-```
-
-3. Edit:
-
-```bash
 sudo nano /etc/bandju-telegram-bot/.env
 ```
 
-4. Set:
+Minimum configuration:
 
 ```env
-TELEGRAM_BOT_TOKEN=...
-TELEGRAM_ADMIN_IDS=123456789
+TELEGRAM_BOT_TOKEN=YOUR_BOT_TOKEN
+TELEGRAM_ADMIN_IDS=YOUR_TELEGRAM_ID
 BANDJU_API_BASE=http://127.0.0.1:7777
 BANDJU_MUTATIONS_ENABLED=0
 ```
 
-5. Start:
-
-```bash
-sudo systemctl enable --now bandju-telegram-bot
-```
-
-6. Check the API safely:
+Then:
 
 ```bash
 sudo bandju-telegram-bot-api-check
+sudo systemctl enable --now bandju-telegram-bot
+sudo systemctl status bandju-telegram-bot --no-pager
 ```
 
-Do not expose port 7777 publicly and never put the Telegram token in Git.
+After code updates, rerun `install.sh` and:
 
-## Important
+```bash
+sudo systemctl restart bandju-telegram-bot
+```
 
-Bandju API route names can change between releases. The adapter supports discovery and configurable paths. Do not enable mutations until the installed Bandju 1.9.0 routes and request formats have been verified.
+## Live test
+
+1. Install in safe mode.
+2. Run `bandju-telegram-bot-api-check`.
+3. Start the bot and use `/health`.
+4. Only after that, set `BANDJU_MUTATIONS_ENABLED=1`.
+5. Create one disposable Telegram test client.
+6. Verify it appears in Bandju.
+7. Test enable/disable.
+8. Test deletion.
+9. Check logs after each mutation.
+
+Keep Bandju port 7777 local-only. Never put the Telegram token in GitHub.
+
+## Logs
+
+```bash
+sudo journalctl -u bandju-telegram-bot -n 100 --no-pager
+sudo systemctl status bandju-telegram-bot --no-pager
+```
