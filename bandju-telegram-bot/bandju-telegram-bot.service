@@ -1,0 +1,21 @@
+[Unit]
+Description=Bandju Telegram VPN Bot
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/bandju-telegram-bot
+EnvironmentFile=/etc/bandju-telegram-bot/.env
+ExecStart=/opt/bandju-telegram-bot/venv/bin/python /opt/bandju-telegram-bot/bot.py
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/bandju-telegram-bot
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
