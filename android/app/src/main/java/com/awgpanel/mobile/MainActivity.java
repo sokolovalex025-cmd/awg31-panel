@@ -46,7 +46,7 @@ public class MainActivity extends Activity {
           .setNegativeButton("Отмена",null).show();
     }
     EditText e(String hint){EditText x=new EditText(this);x.setHint(hint);return x;}
-    void ping(Server s){status.setText("Проверяю "+s.name+"…");new Thread(()->{long t=System.currentTimeMillis();boolean ok=false;try(Socket x=new Socket()){x.connect(new InetSocketAddress(s.host,s.port),2500);ok=true;}catch(Exception ignored){}long ms=System.currentTimeMillis()-t;runOnUiThread(()->status.setText(ok?"🟢 "+s.name+": "+ms+" ms":"🔴 "+s.name+": недоступен"));}).start();}
+    void ping(Server s){status.setText("Проверяю "+s.name+"…");new Thread(()->{long t=System.currentTimeMillis();boolean ok=false;try(Socket x=new Socket()){x.connect(new InetSocketAddress(s.host,s.port),2500);ok=true;}catch(Exception ignored){}long ms=System.currentTimeMillis()-t;final boolean reachable=ok;runOnUiThread(()->status.setText(reachable?"🟢 "+s.name+": "+ms+" ms":"🔴 "+s.name+": недоступен"));}).start();}
     void autoSelect(){if(servers.isEmpty()){status.setText("Сначала добавьте серверы");return;}status.setText("Ищу лучший сервер…");new Thread(()->{Server best=null;long bm=Long.MAX_VALUE;for(Server s:servers){long t=System.currentTimeMillis();try(Socket x=new Socket()){x.connect(new InetSocketAddress(s.host,s.port),1800);long ms=System.currentTimeMillis()-t;if(ms<bm){bm=ms;best=s;}}catch(Exception ignored){}}Server b=best;long m=bm;runOnUiThread(()->status.setText(b==null?"Нет доступных серверов":"⚡ Лучший: "+b.name+" — "+m+" ms"));}).start();}
     void select(Server s){status.setText("Выбран "+s.name+" — готов к подключению");Toast.makeText(this,"Выбран: "+s.name,Toast.LENGTH_SHORT).show();}
 }
