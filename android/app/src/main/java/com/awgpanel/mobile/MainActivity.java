@@ -1,87 +1,52 @@
-package com.awgpanel.mobile;
+package com.nova.antizapret;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.Intent;
-import android.content.SharedPreferences;
-import android.graphics.Color;
-import android.net.Uri;
-import android.net.http.SslError;
 import android.os.Bundle;
+import android.graphics.Color;
 import android.view.Gravity;
-import android.view.View;
-import android.view.ViewGroup;
-import android.view.Window;
-import android.webkit.CookieManager;
-import android.webkit.DownloadListener;
-import android.webkit.SslErrorHandler;
-import android.webkit.WebChromeClient;
-import android.webkit.WebResourceError;
-import android.webkit.WebResourceRequest;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
-import android.widget.Button;
-import android.widget.EditText;
-import android.widget.LinearLayout;
-import android.widget.ProgressBar;
-import android.widget.TextView;
+import android.widget.*;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 
 public class MainActivity extends Activity {
-    private static final String PREFS = "nova_network";
-    private static final String KEY_URL = "panel_url";
-    private static final String DEFAULT_URL = "http://95.85.241.45:8080";
-    private WebView webView;
-    private LinearLayout errorView;
-    private TextView errorTitle, errorText, addressText;
-    private ProgressBar progress;
-    private SharedPreferences prefs;
+    private final java.util.List<Server> servers = new java.util.ArrayList<>();
+    private LinearLayout list; private TextView status;
+    static class Server { String name,host,country; int port; Server(String n,String h,int p,String c){name=n;host=h;port=p;country=c;} }
 
-    @Override protected void onCreate(Bundle state) {
-        super.onCreate(state);
-        requestWindowFeature(Window.FEATURE_NO_TITLE);
-        Window w = getWindow();
-        w.setStatusBarColor(Color.rgb(3, 13, 28));
-        w.setNavigationBarColor(Color.rgb(3, 13, 28));
-        prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-        buildUi();
-        if (state != null) webView.restoreState(state); else loadPanel();
+    public void onCreate(Bundle b){
+        super.onCreate(b);
+        LinearLayout root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setPadding(24,24,24,16);
+        TextView title=new TextView(this); title.setText("NOVA AntiZapret"); title.setTextSize(28); title.setTextColor(Color.WHITE); title.setGravity(Gravity.CENTER); title.setPadding(12,24,12,24); title.setBackgroundColor(Color.rgb(20,24,32)); root.addView(title);
+        status=new TextView(this); status.setText("Не подключено"); status.setTextSize(18); status.setGravity(Gravity.CENTER); status.setPadding(8,22,8,16); root.addView(status);
+        Button auto=new Button(this); auto.setText("⚡ Автовыбор лучшего сервера"); auto.setOnClickListener(v->autoSelect()); root.addView(auto);
+        Button add=new Button(this); add.setText("＋ Добавить сервер"); add.setOnClickListener(v->addServerDialog()); root.addView(add);
+        list=new LinearLayout(this); list.setOrientation(LinearLayout.VERTICAL);
+        ScrollView scroll=new ScrollView(this); scroll.addView(list); root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        setContentView(root); render();
     }
-    private int dp(float v) { return (int) (v * getResources().getDisplayMetrics().density + .5f); }
-    private void buildUi() {
-        LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(Color.rgb(3, 13, 28));
-        LinearLayout top = new LinearLayout(this); top.setGravity(Gravity.CENTER_VERTICAL); top.setPadding(dp(16), dp(6), dp(10), dp(4)); top.setBackgroundColor(Color.rgb(3, 13, 28));
-        LinearLayout titleBox = new LinearLayout(this); titleBox.setOrientation(LinearLayout.VERTICAL);
-        TextView title = text("NOVA", Color.WHITE, 18, true); addressText = text(panelUrl(), Color.rgb(145, 165, 185), 11, false); addressText.setSingleLine(true); titleBox.addView(title); titleBox.addView(addressText);
-        top.addView(titleBox, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        Button refresh = toolButton("↻"), settings = toolButton("⚙"); top.addView(refresh); top.addView(settings); refresh.setOnClickListener(v -> loadPanel()); settings.setOnClickListener(v -> showSettings());
-        progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal); progress.setMax(100); progress.setVisibility(View.GONE);
-        root.addView(top, new LinearLayout.LayoutParams(-1, dp(62))); root.addView(progress, new LinearLayout.LayoutParams(-1, dp(2)));
-        webView = new WebView(this); WebSettings ws = webView.getSettings(); ws.setJavaScriptEnabled(true); ws.setDomStorageEnabled(true); ws.setDatabaseEnabled(true); ws.setAllowFileAccess(false); ws.setAllowContentAccess(true); ws.setSupportZoom(false); ws.setBuiltInZoomControls(false); ws.setDisplayZoomControls(false); ws.setLoadWithOverviewMode(false); ws.setUseWideViewPort(false); ws.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW); ws.setCacheMode(WebSettings.LOAD_DEFAULT); ws.setTextZoom(100); ws.setUserAgentString("Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36 NOVAMobile/1.0");
-        CookieManager cm = CookieManager.getInstance(); cm.setAcceptCookie(true); cm.setAcceptThirdPartyCookies(webView, true); webView.setBackgroundColor(Color.rgb(3, 13, 28)); webView.setVerticalScrollBarEnabled(false); webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        webView.setWebViewClient(new WebViewClient() {
-            @Override public void onPageStarted(WebView v, String url, android.graphics.Bitmap favicon) { addressText.setText(url); progress.setProgress(10); progress.setVisibility(View.VISIBLE); showWebView(); }
-            @Override public void onPageFinished(WebView v, String url) { addressText.setText(url); progress.setProgress(100); progress.postDelayed(() -> progress.setVisibility(View.GONE), 180); showWebView(); }
-            @Override public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) { if (r.isForMainFrame()) showError("Не удалось открыть NOVA", "Проверьте интернет и адрес VPS.\n\n" + e.getDescription()); }
-            @Override public void onReceivedSslError(WebView v, SslErrorHandler h, SslError e) { h.cancel(); showError("Ошибка HTTPS", "Сертификат панели не прошёл проверку. Проверьте адрес и сертификат."); }
-            @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) { String u = r.getUrl().toString(); if (u.startsWith("http://") || u.startsWith("https://")) return false; try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(u))); } catch (Exception ignored) {} return true; }
-        });
-        webView.setWebChromeClient(new WebChromeClient() { @Override public void onProgressChanged(WebView view, int newProgress) { progress.setProgress(newProgress); progress.setVisibility(newProgress >= 100 ? View.GONE : View.VISIBLE); } @Override public void onReceivedTitle(WebView view, String t) { if (t != null && !t.trim().isEmpty()) addressText.setText(t); } });
-        webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> { try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); } catch (Exception ignored) { showError("Не удалось открыть файл", "На телефоне нет приложения для этого типа файла."); } });
-        errorView = new LinearLayout(this); errorView.setOrientation(LinearLayout.VERTICAL); errorView.setGravity(Gravity.CENTER); errorView.setPadding(dp(28), dp(28), dp(28), dp(28)); errorView.setBackgroundColor(Color.rgb(3, 13, 28)); errorTitle = text("", Color.WHITE, 22, true); errorTitle.setGravity(Gravity.CENTER); errorText = text("", Color.LTGRAY, 15, false); errorText.setGravity(Gravity.CENTER); errorText.setPadding(0, dp(14), 0, dp(20)); Button retry = actionButton("Повторить"), change = actionButton("Изменить адрес"); errorView.addView(errorTitle); errorView.addView(errorText); errorView.addView(retry); errorView.addView(change); retry.setOnClickListener(v -> loadPanel()); change.setOnClickListener(v -> showSettings());
-        root.addView(webView, new LinearLayout.LayoutParams(-1, 0, 1f)); root.addView(errorView, new LinearLayout.LayoutParams(-1, 0, 1f));
-        LinearLayout bottom = new LinearLayout(this); bottom.setGravity(Gravity.CENTER); bottom.setPadding(dp(6), dp(4), dp(6), dp(5)); bottom.setBackgroundColor(Color.rgb(3, 13, 28)); Button back = toolButton("‹"), forward = toolButton("›"), home = toolButton("⌂"), reload = toolButton("↻"); bottom.addView(back, new LinearLayout.LayoutParams(0, dp(50), 1f)); bottom.addView(forward, new LinearLayout.LayoutParams(0, dp(50), 1f)); bottom.addView(home, new LinearLayout.LayoutParams(0, dp(50), 1f)); bottom.addView(reload, new LinearLayout.LayoutParams(0, dp(50), 1f)); back.setOnClickListener(v -> { if (webView.canGoBack()) webView.goBack(); }); forward.setOnClickListener(v -> { if (webView.canGoForward()) webView.goForward(); }); home.setOnClickListener(v -> loadPanel()); reload.setOnClickListener(v -> webView.reload()); root.addView(bottom, new LinearLayout.LayoutParams(-1, dp(58)));
-        setContentView(root); errorView.setVisibility(View.GONE);
+    void render(){
+        list.removeAllViews();
+        if(servers.isEmpty()){ TextView t=new TextView(this); t.setText("Добавьте первый сервер"); t.setTextSize(16); t.setPadding(30,30,30,30); list.addView(t); }
+        for(Server s:servers){
+            LinearLayout row=new LinearLayout(this); row.setOrientation(LinearLayout.HORIZONTAL); row.setPadding(8,12,8,12);
+            TextView t=new TextView(this); t.setText(s.country+"  "+s.name+"\n"+s.host+":"+s.port); t.setTextSize(16);
+            row.addView(t,new LinearLayout.LayoutParams(0,-2,1));
+            Button check=new Button(this); check.setText("Проверить"); check.setOnClickListener(v->ping(s)); row.addView(check);
+            Button connect=new Button(this); connect.setText("Выбрать"); connect.setOnClickListener(v->select(s)); row.addView(connect);
+            list.addView(row);
+        }
     }
-    private TextView text(String value, int color, float size, boolean bold) { TextView t = new TextView(this); t.setText(value); t.setTextColor(color); t.setTextSize(size); if (bold) t.setTypeface(null, android.graphics.Typeface.BOLD); return t; }
-    private Button toolButton(String value) { Button b = new Button(this); b.setText(value); b.setTextColor(Color.WHITE); b.setTextSize(20); b.setAllCaps(false); b.setMinWidth(0); b.setMinHeight(0); b.setPadding(dp(4), 0, dp(4), 0); return b; }
-    private Button actionButton(String value) { Button b = new Button(this); b.setText(value); b.setAllCaps(false); b.setMinHeight(dp(48)); return b; }
-    private String panelUrl() { return prefs.getString(KEY_URL, DEFAULT_URL); }
-    private void loadPanel() { addressText.setText(panelUrl()); showWebView(); webView.loadUrl(panelUrl()); }
-    private void showWebView() { webView.setVisibility(View.VISIBLE); errorView.setVisibility(View.GONE); }
-    private void showError(String title, String message) { progress.setVisibility(View.GONE); errorTitle.setText(title); errorText.setText(message); webView.setVisibility(View.GONE); errorView.setVisibility(View.VISIBLE); }
-    private void showSettings() { EditText input = new EditText(this); input.setSingleLine(true); input.setText(panelUrl()); input.setSelectAllOnFocus(true); input.setHint("http://IP:8080 или https://домен"); new AlertDialog.Builder(this).setTitle("Адрес NOVA").setMessage("Адрес web-панели VPS").setView(input).setNegativeButton("Отмена", null).setNeutralButton("Сбросить", (d, w) -> { prefs.edit().remove(KEY_URL).apply(); loadPanel(); }).setPositiveButton("Сохранить", (d, w) -> { String url = input.getText().toString().trim(); if (!url.startsWith("http://") && !url.startsWith("https://")) url = "http://" + url; prefs.edit().putString(KEY_URL, url).apply(); loadPanel(); }).show(); }
-    @Override protected void onSaveInstanceState(Bundle out) { webView.saveState(out); super.onSaveInstanceState(out); }
-    @Override public void onBackPressed() { if (webView != null && webView.canGoBack()) webView.goBack(); else super.onBackPressed(); }
-    @Override protected void onDestroy() { if (webView != null) { webView.stopLoading(); webView.destroy(); } super.onDestroy(); }
+    void addServerDialog(){
+        LinearLayout box=new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL); box.setPadding(24,8,24,4);
+        EditText n=e("Название"),h=e("IP или домен"),p=e("Порт"),c=e("Страна/флаг");
+        box.addView(n);box.addView(h);box.addView(p);box.addView(c);
+        new AlertDialog.Builder(this).setTitle("Добавить сервер").setView(box)
+          .setPositiveButton("Добавить",(d,w)->{servers.add(new Server(n.getText().toString(),h.getText().toString(),Integer.parseInt(p.getText().toString().isEmpty()?"1194":p.getText().toString()),c.getText().toString().isEmpty()?"🌐":c.getText().toString()));render();})
+          .setNegativeButton("Отмена",null).show();
+    }
+    EditText e(String hint){EditText x=new EditText(this);x.setHint(hint);return x;}
+    void ping(Server s){status.setText("Проверяю "+s.name+"…");new Thread(()->{long t=System.currentTimeMillis();boolean ok=false;try(Socket x=new Socket()){x.connect(new InetSocketAddress(s.host,s.port),2500);ok=true;}catch(Exception ignored){}long ms=System.currentTimeMillis()-t;runOnUiThread(()->status.setText(ok?"🟢 "+s.name+": "+ms+" ms":"🔴 "+s.name+": недоступен"));}).start();}
+    void autoSelect(){if(servers.isEmpty()){status.setText("Сначала добавьте серверы");return;}status.setText("Ищу лучший сервер…");new Thread(()->{Server best=null;long bm=Long.MAX_VALUE;for(Server s:servers){long t=System.currentTimeMillis();try(Socket x=new Socket()){x.connect(new InetSocketAddress(s.host,s.port),1800);long ms=System.currentTimeMillis()-t;if(ms<bm){bm=ms;best=s;}}catch(Exception ignored){}}Server b=best;long m=bm;runOnUiThread(()->status.setText(b==null?"Нет доступных серверов":"⚡ Лучший: "+b.name+" — "+m+" ms"));}).start();}
+    void select(Server s){status.setText("Выбран "+s.name+" — готов к подключению");Toast.makeText(this,"Выбран: "+s.name,Toast.LENGTH_SHORT).show();}
 }
