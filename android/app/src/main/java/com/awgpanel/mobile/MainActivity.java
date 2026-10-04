@@ -168,8 +168,12 @@ public class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data) {
         super.onActivityResult(requestCode,resultCode,data);
-        if(requestCode!=PICK_OVPN||resultCode!=RESULT_OK||data==null||data.getData()==null) return;
-        Uri uri=data.getData();
+        if(requestCode!=PICK_CONFIG||resultCode!=RESULT_OK||data==null) return;
+        if(data.getClipData()!=null){
+            for(int i=0;i<data.getClipData().getItemCount();i++) importConfig(data.getClipData().getItemAt(i).getUri());
+        } else if(data.getData()!=null) importConfig(data.getData());
+    }
+    private void importConfig(Uri uri) {
         try {
             String host="openvpn"; int port=1194; String content;
             try(InputStream in=getContentResolver().openInputStream(uri)) {
