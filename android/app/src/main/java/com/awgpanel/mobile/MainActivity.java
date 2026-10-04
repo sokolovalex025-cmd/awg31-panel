@@ -25,7 +25,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class MainActivity extends Activity {
-    private static final int PICK_OVPN = 1001;
+    private static final int PICK_CONFIG = 1001;
     private final List<Server> servers = new ArrayList<>();
     private LinearLayout list;
     private TextView status, statusDetail;
@@ -85,8 +85,8 @@ public class MainActivity extends Activity {
         LinearLayout titleRow=new LinearLayout(this); titleRow.setGravity(Gravity.CENTER_VERTICAL);
         TextView st=tv("Серверы",20,text); st.setTypeface(null,android.graphics.Typeface.BOLD);
         titleRow.addView(st,lp(0,55,1));
-        Button imp=new Button(this); imp.setText("＋ .ovpn"); imp.setTextColor(text); imp.setAllCaps(false);
-        imp.setOnClickListener(v->pickOvpn()); titleRow.addView(imp,lp(-2,50,0));
+        Button imp=new Button(this); imp.setText("＋ Импорт"); imp.setTextColor(text); imp.setAllCaps(false);
+        imp.setOnClickListener(v->pickConfig()); titleRow.addView(imp,lp(-2,50,0));
         Button add=new Button(this); add.setText("＋ Добавить"); add.setTextColor(text); add.setAllCaps(false);
         add.setOnClickListener(v->addServerDialog()); titleRow.addView(add,lp(-2,50,0)); root.addView(titleRow);
 
@@ -161,9 +161,9 @@ public class MainActivity extends Activity {
         EditText x=new EditText(this); x.setHint(hint); x.setTextColor(text); x.setHintTextColor(muted); x.setSingleLine(true); return x;
     }
 
-    private void pickOvpn() {
+    private void pickConfig() {
         Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT); i.addCategory(Intent.CATEGORY_OPENABLE);
-        i.setType("application/x-openvpn-profile"); startActivityForResult(i,PICK_OVPN);
+        i.setType("*/*"); startActivityForResult(i,PICK_OVPN);
     }
 
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data) {
@@ -242,7 +242,7 @@ public class MainActivity extends Activity {
     }
 
     private void showAbout() {
-        new AlertDialog.Builder(this).setTitle("NOVA AntiZapret")
+        new AlertDialog.Builder(this).setTitle("NOVA VPN")
             .setMessage("Версия " + BuildConfig.VERSION_NAME + "\n\nПроверить наличие новой версии?")
             .setPositiveButton("Проверить",(d,w)->checkForUpdates(true))
             .setNegativeButton("Закрыть",null).show();
