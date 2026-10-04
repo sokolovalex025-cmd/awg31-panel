@@ -203,7 +203,7 @@ public class MainActivity extends Activity {
                 java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();
                 byte[] buf=new byte[8192]; int n;
                 while((n=in.read(buf))>0) out.write(buf,0,n);
-                content=out.toString("UTF-8");
+                content=new String(out.toByteArray(), java.nio.charset.StandardCharsets.UTF_8);
             }
             String protocol=detectProtocol(name,content);
             if(protocol==null) throw new Exception("unknown config");
@@ -214,8 +214,10 @@ public class MainActivity extends Activity {
             File dir=new File(getFilesDir(),"profiles");
             if(!dir.exists()&&!dir.mkdirs()) throw new Exception();
             String ext=protocol.equals("awg")?".conf":".ovpn";
-            File outFile=new File(dir,"server_"+System.currentTimeMillis()+ext);
-            try(FileOutputStream fos=new FileOutputStream(outFile)){fos.write(content.getBytes("UTF-8"));}
+            File outFile=new File(dir,"server_"+System.nanoTime()+ext);
+            try(FileOutputStream fos=new FileOutputStream(outFile)){
+                fos.write(content.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
 
             String base=name;
             int dot=base.lastIndexOf('.');
