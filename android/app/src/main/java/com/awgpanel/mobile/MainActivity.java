@@ -9,6 +9,8 @@ import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Build;
+import android.provider.Settings;
 import android.view.Gravity;
 import android.widget.*;
 import androidx.core.content.FileProvider;
@@ -46,6 +48,7 @@ public class MainActivity extends Activity {
         getWindow().setStatusBarColor(bg);
         prefs=getSharedPreferences("nova_servers",MODE_PRIVATE);
         load(); buildUi(); render();
+        checkForUpdates(false);
     }
 
     private TextView tv(String value,float size,int color) {
@@ -94,6 +97,7 @@ public class MainActivity extends Activity {
         LinearLayout bottom=new LinearLayout(this); bottom.setGravity(Gravity.CENTER); bottom.setPadding(4,8,4,0);
         TextView home=tv("⌂\nГлавная",12,text); home.setGravity(Gravity.CENTER);
         TextView info=tv("ⓘ\nО приложении",12,muted); info.setGravity(Gravity.CENTER);
+        info.setOnClickListener(v->showAbout());
         bottom.addView(home,lp(0,55,1)); bottom.addView(info,lp(0,55,1)); root.addView(bottom);
         setContentView(root);
     }
@@ -235,6 +239,116 @@ public class MainActivity extends Activity {
             startActivity(Intent.createChooser(intent,"Открыть профиль в OpenVPN"));
             status.setText("● Передаю профиль OpenVPN");statusDetail.setText(s.name);
         }catch(Exception ex){Toast.makeText(this,"Установите OpenVPN-клиент для Android",Toast.LENGTH_LONG).show();}
+    }
+
+    private void showAbout() {
+        new AlertDialog.Builder(this).setTitle("NOVA AntiZapret")
+            .setMessage("Версия " + BuildConfig.VERSION_NAME + "\n\nПроверить наличие новой версии?")
+            .setPositiveButton("Проверить",(d,w)->checkForUpdates(true))
+            .setNegativeButton("Закрыть",null).show();
+    }
+
+    private void checkForUpdates(boolean manual) {
+        new Thread(() -> {
+            try {
+                java.net.HttpURLConnection con=(java.net.HttpURLConnection)new java.net.URL(
+                    "https://api.github.com/repos/sokolovalex025-cmd/awg31-panel/releases/latest").openConnection();
+                con.setConnectTimeout(5000); con.setReadTimeout(7000);
+                con.setRequestProperty("Accept","application/vnd.github+json");
+                con.setRequestProperty("User-Agent","NOVA-AntiZapret");
+                if(con.getResponseCode()!=200) throw new Exception();
+                java.io.InputStream in=con.getInputStream();
+                java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();
+                byte[] buf=new byte[8192]; int n;
+                while((n=in.read(buf))>0) out.write(buf,0,n);
+                in.close(); con.disconnect();
+                JSONObject release=new JSONObject(out.toString("UTF-8"));
+                String tag=release.optString("tag_name","");
+                String latest=tag.startsWith("v")?tag.substring(1):tag;
+                String assetUrl="";
+                JSONArray assets=release.optJSONArray("assets");
+                if(assets!=null) for(int i=0;i<assets.length();i++){
+                    JSONObject a=assets.getJSONObject(i);
+                    if("NOVA-AntiZapret.apk".equals(a.optString("name"))){
+                        assetUrl=a.optString("browser_download_url",""); break;
+                    }
+                }
+                if(assetUrl.isEmpty()) assetUrl="https://github.com/sokolovalex025-cmd/awg31-panel/releases/latest/download/NOVA-AntiZapret.apk";
+                final String version=latest, downloadUrl=assetUrl;
+                if(isNewer(version,BuildConfig.VERSION_NAME))
+                    runOnUiThread(()->showUpdateDialog(version,downloadUrl));
+                else if(manual)
+                    runOnUiThread(()->Toast.makeText(this,"У вас последняя версия "+BuildConfig.VERSION_NAME,Toast.LENGTH_SHORT).show());
+            } catch(Exception ex) {
+                if(manual) runOnUiThread(()->Toast.makeText(this,"Не удалось проверить обновления",Toast.LENGTH_SHORT).show());
+            }
+        }).start();
+    }
+
+    private boolean isNewer(String remote,String local) {
+        try {
+            String[] a=remote.split("\\."); String[] b=local.split("\\.");
+            int n=Math.max(a.length,b.length);
+            for(int i=0;i<n;i++){
+                int x=i<a.length?Integer.parseInt(a[i].replaceAll("[^0-9].*","")):0;
+                int y=i<b.length?Integer.parseInt(b[i].replaceAll("[^0-9].*","")):0;
+                if(x!=y) return x>y;
+            }
+        } catch(Exception ignored) {}
+        return false;
+    }
+
+    private void showUpdateDialog(String version,String downloadUrl) {
+        new AlertDialog.Builder(this).setTitle("Доступно обновление")
+            .setMessage("Новая версия: "+version+"\nТекущая: "+BuildConfig.VERSION_NAME)
+            .setPositiveButton("Обновить",(d,w)->downloadAndInstall(downloadUrl))
+            .setNegativeButton("Позже",null).show();
+    }
+
+    private void downloadAndInstall(String downloadUrl) {
+        status.setText("● Скачиваю обновление…"); statusDetail.setText("NOVA AntiZapret");
+        new Thread(() -> {
+            try {
+                File dir=new File(getCacheDir(),"updates");
+                if(!dir.exists()&&!dir.mkdirs()) throw new Exception();
+                File apk=new File(dir,"NOVA-AntiZapret.apk");
+                java.net.HttpURLConnection con=(java.net.HttpURLConnection)new java.net.URL(downloadUrl).openConnection();
+                con.setConnectTimeout(10000); con.setReadTimeout(30000);
+                con.setRequestProperty("User-Agent","NOVA-AntiZapret");
+                if(con.getResponseCode()!=200) throw new Exception();
+                try(InputStream in=con.getInputStream(); FileOutputStream fos=new FileOutputStream(apk)){
+                    byte[] buf=new byte[8192]; int n;
+                    while((n=in.read(buf))>0) fos.write(buf,0,n);
+                }
+                con.disconnect(); runOnUiThread(()->installApk(apk));
+            } catch(Exception ex) {
+                runOnUiThread(()->{
+                    status.setText("● Ошибка обновления"); statusDetail.setText("Не удалось скачать APK");
+                    Toast.makeText(this,"Не удалось скачать обновление",Toast.LENGTH_LONG).show();
+                });
+            }
+        }).start();
+    }
+
+    private void installApk(File apk) {
+        try {
+            if(Build.VERSION.SDK_INT>=26 && !getPackageManager().canRequestPackageInstalls()){
+                new AlertDialog.Builder(this).setTitle("Разрешение на установку")
+                    .setMessage("Разрешите NOVA AntiZapret устанавливать обновления из APK.")
+                    .setPositiveButton("Открыть настройки",(d,w)->{
+                        Intent i=new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                            Uri.parse("package:"+getPackageName())); startActivity(i);
+                    }).setNegativeButton("Отмена",null).show();
+                return;
+            }
+            Uri uri=FileProvider.getUriForFile(this,getPackageName()+".fileprovider",apk);
+            Intent i=new Intent(Intent.ACTION_VIEW);
+            i.setDataAndType(uri,"application/vnd.android.package-archive");
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(i);
+        } catch(Exception ex) {
+            Toast.makeText(this,"Не удалось запустить установку APK",Toast.LENGTH_LONG).show();
+        }
     }
 
     private void save(){
