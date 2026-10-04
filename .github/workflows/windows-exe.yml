@@ -26,3 +26,5 @@ jobs:
         with:
           name: NOVA-VPN-Windows-x64
           path: NOVA-VPN-Windows-x64.zip
+
+# Final pre-release build verification
