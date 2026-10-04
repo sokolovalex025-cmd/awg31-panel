@@ -48,6 +48,7 @@ public class MainActivity extends Activity {
         getWindow().setStatusBarColor(bg);
         prefs=getSharedPreferences("nova_servers",MODE_PRIVATE);
         load(); buildUi(); render();
+        handleIncomingIntent(getIntent());
         checkForUpdates(false);
     }
 
@@ -159,6 +160,23 @@ public class MainActivity extends Activity {
 
     private EditText e(String hint) {
         EditText x=new EditText(this); x.setHint(hint); x.setTextColor(text); x.setHintTextColor(muted); x.setSingleLine(true); return x;
+    }
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleIncomingIntent(intent);
+    }
+
+    private void handleIncomingIntent(Intent intent) {
+        if(intent==null) return;
+        String action=intent.getAction();
+        if(Intent.ACTION_VIEW.equals(action) && intent.getData()!=null) {
+            importConfig(intent.getData());
+        } else if(Intent.ACTION_SEND.equals(action) && intent.getParcelableExtra(Intent.EXTRA_STREAM)!=null) {
+            Uri uri=intent.getParcelableExtra(Intent.EXTRA_STREAM);
+            if(uri!=null) importConfig(uri);
+        }
     }
 
     private void pickConfig() {
@@ -329,7 +347,7 @@ public class MainActivity extends Activity {
                 selected=bi;save();render();status.setText("⚡ Лучший сервер");
                 statusDetail.setText(servers.get(bi).country+"  "+servers.get(bi).name+"  •  "+m+" ms");
                 if(servers.get(bi).profilePath!=null)connect(bi);
-                else Toast.makeText(this,"Сервер выбран. Для VPN импортируйте .ovpn",Toast.LENGTH_LONG).show();
+                else Toast.makeText(this,"Сервер выбран. Для VPN импортируйте профиль",Toast.LENGTH_LONG).show();
             });
         }).start();
     }
