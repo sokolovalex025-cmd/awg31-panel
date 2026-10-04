@@ -25,4 +25,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: NOVA-VPN-Windows-x64
-          path: AWG-Panel-Windows-x64.zip
+          path: NOVA-VPN-Windows-x64.zip
