@@ -2,6 +2,9 @@ plugins { id 'com.android.application' }
 android {
     namespace 'com.nova.antizapret'
     compileSdk 35
+    buildFeatures {
+        buildConfig true
+    }
     defaultConfig {
         applicationId 'com.nova.antizapret'
         minSdk 26
