@@ -1,4 +1,4 @@
-name: Build Windows EXE
+name: Build NOVA VPN Windows EXE
 on:
   push:
     branches: [ main ]
@@ -20,9 +20,9 @@ jobs:
         run: dotnet publish windows/AWGPanel.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
       - name: Create ZIP
         shell: pwsh
-        run: Compress-Archive -Path publish/* -DestinationPath AWG-Panel-Windows-x64.zip -Force
+        run: Compress-Archive -Path publish/* -DestinationPath NOVA-VPN-Windows-x64.zip -Force
       - name: Upload Windows application
         uses: actions/upload-artifact@v4
         with:
-          name: AWG-Panel-Windows-x64
+          name: NOVA-VPN-Windows-x64
           path: AWG-Panel-Windows-x64.zip
