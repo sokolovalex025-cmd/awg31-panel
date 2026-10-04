@@ -163,7 +163,10 @@ public class MainActivity extends Activity {
 
     private void pickConfig() {
         Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT); i.addCategory(Intent.CATEGORY_OPENABLE);
-        i.setType("*/*"); startActivityForResult(i,PICK_OVPN);
+        i.setType("*/*");
+        i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/x-openvpn-profile","application/x-wireguard-profile","application/octet-stream","text/plain"});
+        startActivityForResult(i,PICK_CONFIG);
     }
 
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data) {
