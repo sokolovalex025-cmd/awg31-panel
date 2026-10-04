@@ -249,6 +249,15 @@ public class MainActivity extends Activity {
     }
 
     private void checkForUpdates(boolean manual) {
+        // Debug APKs are signed by the CI runner's debug key and cannot be safely
+        // upgraded to the production release APK. Only release builds use the
+        // permanent NOVA signing key and participate in in-app updates.
+        if (BuildConfig.DEBUG) {
+            if (manual) runOnUiThread(() -> Toast.makeText(this,
+                "Это debug-версия. Обновления устанавливаются только из release APK.",
+                Toast.LENGTH_LONG).show());
+            return;
+        }
         new Thread(() -> {
             try {
                 java.net.HttpURLConnection con=(java.net.HttpURLConnection)new java.net.URL(
