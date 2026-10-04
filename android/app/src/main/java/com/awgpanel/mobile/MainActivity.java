@@ -36,10 +36,10 @@ public class MainActivity extends Activity {
     private SharedPreferences prefs;
 
     static class Server {
-        String name, host, country, profilePath;
+        String name, host, country, profilePath, protocol;
         int port;
-        Server(String n, String h, int p, String c, String profile) {
-            name=n; host=h; port=p; country=c; profilePath=profile;
+        Server(String n, String h, int p, String c, String profile, String proto) {
+            name=n; host=h; port=p; country=c; profilePath=profile; protocol=proto;
         }
     }
 
@@ -73,7 +73,7 @@ public class MainActivity extends Activity {
         LinearLayout hero=new LinearLayout(this); hero.setOrientation(LinearLayout.VERTICAL);
         hero.setGravity(Gravity.CENTER); hero.setPadding(18,18,18,18); hero.setBackground(shape(card,28));
         status=tv("● Не подключено",22,text); status.setGravity(Gravity.CENTER); hero.addView(status);
-        statusDetail=tv("Добавьте сервер или импортируйте .ovpn",14,muted);
+        statusDetail=tv("Импортируйте .conf AWG 3.1 или .ovpn",14,muted);
         statusDetail.setGravity(Gravity.CENTER); hero.addView(statusDetail);
         root.addView(hero,new LinearLayout.LayoutParams(-1,105));
         root.addView(new Space(this),new LinearLayout.LayoutParams(1,10));
@@ -109,7 +109,7 @@ public class MainActivity extends Activity {
             empty.setGravity(Gravity.CENTER); empty.setPadding(20,35,20,35);
             TextView icon=tv("＋",38,muted); icon.setGravity(Gravity.CENTER); empty.addView(icon);
             TextView t=tv("Нет серверов",18,text); t.setGravity(Gravity.CENTER); empty.addView(t);
-            TextView h=tv("Добавьте VPS или импортируйте OpenVPN .ovpn",14,muted);
+            TextView h=tv("Один импорт — AWG 3.1 .conf или OpenVPN .ovpn",14,muted);
             h.setGravity(Gravity.CENTER); empty.addView(h); list.addView(empty); return;
         }
         for(int i=0;i<servers.size();i++) {
@@ -121,7 +121,7 @@ public class MainActivity extends Activity {
             LinearLayout names=new LinearLayout(this); names.setOrientation(LinearLayout.VERTICAL);
             TextView name=tv((index==selected?"✓ ":"")+s.name,17,text);
             name.setTypeface(null,android.graphics.Typeface.BOLD); names.addView(name);
-            TextView addr=tv(s.host+":"+s.port+(s.profilePath!=null?"  •  OpenVPN":""),13,muted); names.addView(addr);
+            TextView addr=tv(s.host+":"+s.port+(s.profilePath!=null?"  •  "+protocolLabel(s.protocol):""),13,muted); names.addView(addr);
             top.addView(names,lp(0,48,1));
             Button choose=new Button(this); choose.setText("Выбрать"); choose.setTextSize(12); choose.setAllCaps(false);
             choose.setOnClickListener(v->select(index)); top.addView(choose,lp(90,48,0)); cardView.addView(top);
@@ -152,7 +152,7 @@ public class MainActivity extends Activity {
                     if(port<1||port>65535) throw new Exception();
                     String name=n.getText().toString().trim().isEmpty()?host:n.getText().toString().trim();
                     String country=c.getText().toString().trim().isEmpty()?"🌐":c.getText().toString().trim();
-                    servers.add(new Server(name,host,port,country,null)); selected=servers.size()-1; save(); render();
+                    servers.add(new Server(name,host,port,country,null,"manual")); selected=servers.size()-1; save(); render();
                 } catch(Exception ex) { Toast.makeText(this,"Проверьте адрес и порт",Toast.LENGTH_SHORT).show(); }
             }).setNegativeButton("Отмена",null).show();
     }
@@ -178,27 +178,128 @@ public class MainActivity extends Activity {
     }
     private void importConfig(Uri uri) {
         try {
-            String host="openvpn"; int port=1194; String content;
+            String name=fileName(uri);
+            String content;
             try(InputStream in=getContentResolver().openInputStream(uri)) {
                 if(in==null) throw new Exception();
-                byte[] buf=new byte[8192]; StringBuilder sb=new StringBuilder(); int n;
-                while((n=in.read(buf))>0) sb.append(new String(buf,0,n,"UTF-8")); content=sb.toString();
+                java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();
+                byte[] buf=new byte[8192]; int n;
+                while((n=in.read(buf))>0) out.write(buf,0,n);
+                content=out.toString("UTF-8");
             }
-            for(String line:content.split("\\r?\\n")) {
-                String t=line.trim();
-                if(t.startsWith("remote ")) {
-                    String[] a=t.split("\\s+"); if(a.length>=2) host=a[1];
-                    if(a.length>=3) try{port=Integer.parseInt(a[2]);}catch(Exception ignored){}
-                    break;
+            String protocol=detectProtocol(name,content);
+            if(protocol==null) throw new Exception("unknown config");
+            String host=protocol.equals("awg")?parseAwgHost(content):parseOpenVpnHost(content);
+            int port=protocol.equals("awg")?parseAwgPort(content):parseOpenVpnPort(content);
+            if(host==null||host.trim().isEmpty()) host=protocol.equals("awg")?"amneziawg":"openvpn";
+
+            File dir=new File(getFilesDir(),"profiles");
+            if(!dir.exists()&&!dir.mkdirs()) throw new Exception();
+            String ext=protocol.equals("awg")?".conf":".ovpn";
+            File outFile=new File(dir,"server_"+System.currentTimeMillis()+ext);
+            try(FileOutputStream fos=new FileOutputStream(outFile)){fos.write(content.getBytes("UTF-8"));}
+
+            String base=name;
+            int dot=base.lastIndexOf('.');
+            if(dot>0) base=base.substring(0,dot);
+            if(base.trim().isEmpty()) base="NOVA "+(servers.size()+1);
+            servers.add(new Server(base,host,port,"🌐",outFile.getAbsolutePath(),protocol));
+            selected=servers.size()-1; save(); render();
+            Toast.makeText(this,protocol.equals("awg")?"AWG 3.1 профиль добавлен":"OpenVPN профиль добавлен",Toast.LENGTH_SHORT).show();
+        } catch(Exception ex) {
+            Toast.makeText(this,"Не удалось импортировать конфиг. Нужен .conf AWG 3.1 или .ovpn",Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private String fileName(Uri uri) {
+        String n=null;
+        try {
+            android.database.Cursor cur=getContentResolver().query(uri,null,null,null,null);
+            if(cur!=null){ try{ if(cur.moveToFirst()){
+                int i=cur.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+                if(i>=0)n=cur.getString(i);
+            }}finally{cur.close();}}
+        } catch(Exception ignored){}
+        if(n==null||n.isEmpty()) n=String.valueOf(uri.getLastPathSegment());
+        return n==null?"config":n;
+    }
+
+    private String detectProtocol(String fileName,String content) {
+        String lower=(fileName==null?"":fileName).toLowerCase(java.util.Locale.US);
+        String l=(content==null?"":content).toLowerCase(java.util.Locale.US);
+        if(lower.endsWith(".conf") || (l.contains("[interface]") && l.contains("[peer]") &&
+            (l.contains("privatekey") || l.contains("publickey") || l.contains("endpoint")))) return "awg";
+        if(lower.endsWith(".ovpn") || l.contains("client") || l.contains("dev tun") ||
+            l.contains("<ca>") || l.contains("remote ")) return "ovpn";
+        return null;
+    }
+
+    private String parseOpenVpnHost(String content) {
+        for(String line:content.split("\\r?\\n")) {
+            String t=line.trim();
+            if(t.startsWith("remote ")) {
+                String[] a=t.split("\\s+");
+                if(a.length>=2) return a[1];
+            }
+        }
+        return null;
+    }
+
+    private int parseOpenVpnPort(String content) {
+        for(String line:content.split("\\r?\\n")) {
+            String t=line.trim();
+            if(t.startsWith("remote ")) {
+                String[] a=t.split("\\s+");
+                if(a.length>=3) try{return Integer.parseInt(a[2]);}catch(Exception ignored){}
+            }
+        }
+        return 1194;
+    }
+
+    private String parseAwgHost(String content) {
+        for(String line:content.split("\\r?\\n")) {
+            String t=line.trim();
+            if(t.startsWith("Endpoint")) {
+                int eq=t.indexOf('=');
+                if(eq>=0){
+                    String ep=t.substring(eq+1).trim();
+                    if(ep.startsWith("[")){
+                        int close=ep.indexOf(']');
+                        if(close>1)return ep.substring(1,close);
+                    }
+                    int colon=ep.lastIndexOf(':');
+                    return colon>0?ep.substring(0,colon):ep;
                 }
             }
-            File dir=new File(getFilesDir(),"profiles"); if(!dir.exists()&&!dir.mkdirs()) throw new Exception();
-            File out=new File(dir,"server_"+System.currentTimeMillis()+".ovpn");
-            try(FileOutputStream fos=new FileOutputStream(out)){fos.write(content.getBytes("UTF-8"));}
-            servers.add(new Server("NOVA "+(servers.size()+1),host,port,"🌐",out.getAbsolutePath()));
-            selected=servers.size()-1; save(); render();
-            Toast.makeText(this,"OpenVPN профиль добавлен",Toast.LENGTH_SHORT).show();
-        } catch(Exception ex) { Toast.makeText(this,"Не удалось импортировать .ovpn",Toast.LENGTH_LONG).show(); }
+        }
+        return null;
+    }
+
+    private int parseAwgPort(String content) {
+        for(String line:content.split("\\r?\\n")) {
+            String t=line.trim();
+            if(t.startsWith("Endpoint")) {
+                int eq=t.indexOf('=');
+                if(eq>=0){
+                    String ep=t.substring(eq+1).trim();
+                    if(ep.startsWith("[")){
+                        int close=ep.indexOf(']');
+                        int colon=ep.indexOf(':',close);
+                        if(colon>0) try{return Integer.parseInt(ep.substring(colon+1));}catch(Exception ignored){}
+                    } else {
+                        int colon=ep.lastIndexOf(':');
+                        if(colon>0) try{return Integer.parseInt(ep.substring(colon+1));}catch(Exception ignored){}
+                    }
+                }
+            }
+        }
+        return 51820;
+    }
+
+    private String protocolLabel(String protocol) {
+        if("awg".equals(protocol)) return "AmneziaWG 3.1";
+        if("ovpn".equals(protocol)) return "OpenVPN";
+        return "Сервер";
     }
 
     private void ping(Server s,TextView result) {
@@ -236,16 +337,23 @@ public class MainActivity extends Activity {
     private void select(int index){selected=index;save();render();Server s=servers.get(index);status.setText("● Выбран сервер");statusDetail.setText(s.country+"  "+s.name);}
 
     private void connect(int index) {
-        if(index<0||index>=servers.size())return;Server s=servers.get(index);
-        if(s.profilePath==null){Toast.makeText(this,"Для этого сервера нужен .ovpn профиль",Toast.LENGTH_LONG).show();return;}
+        if(index<0||index>=servers.size())return;
+        Server s=servers.get(index);
+        if(s.profilePath==null){Toast.makeText(this,"Для этого сервера нужен профиль",Toast.LENGTH_LONG).show();return;}
         try {
             File f=new File(s.profilePath);
             Uri uri=FileProvider.getUriForFile(this,getPackageName()+".fileprovider",f);
-            Intent intent=new Intent(Intent.ACTION_VIEW);intent.setDataAndType(uri,"application/x-openvpn-profile");
+            Intent intent=new Intent(Intent.ACTION_VIEW);
+            String mime="awg".equals(s.protocol) ? "application/x-wireguard-profile" : "application/x-openvpn-profile";
+            intent.setDataAndType(uri,mime);
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            startActivity(Intent.createChooser(intent,"Открыть профиль в OpenVPN"));
-            status.setText("● Передаю профиль OpenVPN");statusDetail.setText(s.name);
-        }catch(Exception ex){Toast.makeText(this,"Установите OpenVPN-клиент для Android",Toast.LENGTH_LONG).show();}
+            String title="awg".equals(s.protocol)?"Открыть профиль в AmneziaWG":"Открыть профиль в OpenVPN";
+            startActivity(Intent.createChooser(intent,title));
+            status.setText("● Передаю профиль");
+            statusDetail.setText(s.name+"  •  "+protocolLabel(s.protocol));
+        }catch(Exception ex){
+            Toast.makeText(this,"Не найден подходящий VPN-клиент. Установите AmneziaWG или OpenVPN.",Toast.LENGTH_LONG).show();
+        }
     }
 
     private void showAbout() {
@@ -370,7 +478,7 @@ public class MainActivity extends Activity {
     private void save(){
         try{JSONArray a=new JSONArray();for(Server s:servers){JSONObject o=new JSONObject();
             o.put("name",s.name);o.put("host",s.host);o.put("port",s.port);o.put("country",s.country);
-            o.put("profile",s.profilePath==null?"":s.profilePath);a.put(o);}
+            o.put("profile",s.profilePath==null?"":s.profilePath); o.put("protocol",s.protocol==null?"manual":s.protocol); a.put(o);}
             prefs.edit().putString("servers",a.toString()).putInt("selected",selected).apply();
         }catch(Exception ignored){}
     }
@@ -381,7 +489,7 @@ public class MainActivity extends Activity {
             for(int i=0;i<a.length();i++){JSONObject o=a.getJSONObject(i);String profile=o.optString("profile","");
                 if(!profile.isEmpty()&&!new File(profile).exists())profile="";
                 servers.add(new Server(o.optString("name","Server"),o.optString("host",""),o.optInt("port",1194),
-                    o.optString("country","🌐"),profile.isEmpty()?null:profile));}
+                    o.optString("country","🌐"),profile.isEmpty()?null:profile,o.optString("protocol","ovpn")));}
             selected=prefs.getInt("selected",-1);if(selected<0||selected>=servers.size())selected=-1;
         }catch(Exception ignored){selected=-1;}
     }
